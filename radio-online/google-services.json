@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "48149883887",
+    "project_id": "filadelfia-b6238",
+    "storage_bucket": "filadelfia-b6238.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:48149883887:android:8626eac1e09a062fc5241a",
+        "android_client_info": {
+          "package_name": "com.filadelfia.radio"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDett3ut86-egxtION32Vcklv2pWk85ziw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
