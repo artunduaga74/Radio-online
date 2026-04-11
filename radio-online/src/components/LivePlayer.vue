@@ -1,13 +1,26 @@
 <template>
-  <v-container class="d-flex justify-center mt-8">
-    <v-card class="player-card pa-4" elevation="6" width="250">
+  <v-container class="d-flex justify-center">
+    <v-card class="player-card pa-4" elevation="6" width="280">
+
+      <!-- Badge EN VIVO / RECONECTANDO -->
+      <div class="d-flex justify-center mb-2">
+        <v-chip v-if="isReconnecting" color="warning" size="small" prepend-icon="mdi-refresh">
+          Reconectando...
+        </v-chip>
+        <v-chip v-else-if="isPlaying" color="error" size="small" prepend-icon="mdi-broadcast">
+          AL AIRE
+        </v-chip>
+        <v-chip v-else color="grey" size="small" prepend-icon="mdi-broadcast-off">
+          FUERA DE AIRE
+        </v-chip>
+      </div>
 
       <!-- Carátula del álbum -->
       <v-img :src="coverImage" class="mx-auto mb-4" max-width="125" max-height="125" />
 
       <!-- Nombre de la canción -->
-      <h3 class="text-center">{{ currentSong || 'Cargando audio...' }}</h3>
-      <p class="text-center text-subtitle-2">{{ currentArtist || 'Cargando predicador...' }}</p>
+      <h3 class="text-center">{{ currentSong || 'La Voz de Filadelfia' }}</h3>
+      <p class="text-center text-subtitle-2">{{ currentArtist || 'Tema Especial' }}</p>
 
       <!-- Controles -->
       <div class="d-flex justify-center align-center my-4">
@@ -29,63 +42,65 @@
 
     </v-card>
   </v-container>
+
+  <!-- Snackbar para notificaciones -->
+  <v-snackbar v-model="snackbar" :timeout="3000" location="bottom">
+    {{ snackbarMsg }}
+    <template #actions>
+      <v-btn color="white" variant="text" @click="snackbar = false">Cerrar</v-btn>
+    </template>
+  </v-snackbar>
 </template>
 
-
 <script setup>
-// Importamos el estado global y las funciones del manager
-import { computed } from 'vue'
-import { ref, onMounted, onUnmounted } from 'vue';
-// Importamos el estado global del audio
-import { activeAudioSource, playRadio, stopRadio } from '@/utils/audioManager'
-// Importamos el icono para los nocovers de asurahosting
+import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { activeAudioSource, playRadio, stopRadio, isReconnecting } from '@/utils/audioManager'
 import portadaLocal from '@/assets/icono.png'
 
-// Configuración radio asignar portada default
-const defaultCentovaCover = "https://cast1.asurahosting.com/static/nonefern/covers/nocover.png";
-const defaultAppCover = portadaLocal;
-// Cargando el stream de radio 
+const defaultCentovaCover = "https://cast1.asurahosting.com/static/nonefern/covers/nocover.png"
+const defaultAppCover = portadaLocal
 const streamUrl = 'https://cast1.my-control-panel.com/proxy/nonefern/stream'
-//----administrar audio global-----//
 
-// Estados
-// cambieré este codigo isplaying = ref(false) x este const isPlaying = computed(() => activeAudioSource.value === 'radio');
-const isPlaying = computed(() => activeAudioSource.value === 'radio');
+// Estado del reproductor
+const isPlaying = computed(() => activeAudioSource.value === 'radio')
 const currentSong = ref('')
 const currentArtist = ref('')
 const coverImage = ref(defaultAppCover)
+const snackbar = ref(false)
+const snackbarMsg = ref('')
 
-// Funciones de control de audio play
+// Mostrar notificación
+const notify = (msg) => {
+  snackbarMsg.value = msg
+  snackbar.value = true
+}
+
+// Controles de audio
 const togglePlay = () => {
   if (isPlaying.value) {
-    // Llama a la función del manager
-    stopRadio();
+    stopRadio()
   } else {
-    // Llama a la función del manager
-    playRadio(streamUrl);
+    playRadio(streamUrl)
   }
-};
+}
 
-// Obtener metadatos
+const stop = () => stopRadio()
+
+// Obtener metadatos del stream
 const fetchMetadata = async () => {
   try {
     const res = await fetch('https://cast1.asurahosting.com/rpc/nonefern/streaminfo.get')
     const json = await res.json()
-
     if (json.data?.[0]?.track) {
       const track = json.data[0].track
       currentSong.value = track.title || 'La Voz de Filadelfia'
       currentArtist.value = track.artist || 'Tema Especial'
-
-      if (!track.imageurl || track.imageurl === defaultCentovaCover) {
-        coverImage.value = defaultAppCover;
-      } else {
-        coverImage.value = track.imageurl;
-      }
+      coverImage.value = (!track.imageurl || track.imageurl === defaultCentovaCover)
+        ? defaultAppCover
+        : track.imageurl
     }
-  } catch (err) {
-    console.error('Error obteniendo metadatos:', err)
-    currentSong.value = 'No disponible'
+  } catch {
+    currentSong.value = 'La Voz de Filadelfia'
     currentArtist.value = ''
     coverImage.value = defaultAppCover
   }
@@ -94,39 +109,35 @@ const fetchMetadata = async () => {
 // Compartir la emisora
 const shareStation = async () => {
   const shareData = {
-    text: 'Escucha la transmisión 📻 La Voz de Filadelfia.. ',
+    text: 'Escucha la transmisión 📻 La Voz de Filadelfia..',
     url: window.location.origin
   }
-
   if (navigator.share) {
     try {
       await navigator.share(shareData)
-      console.log('Compartido con éxito')
-    } catch (err) {
-      console.error('Error al compartir:', err)
+    } catch {
+      // El usuario canceló el diálogo — no hacer nada
     }
   } else {
     try {
       await navigator.clipboard.writeText(shareData.url)
-      alert('Enlace copiado al portapapeles 📋')
-    } catch (err) {
-      console.error('No se pudo copiar el enlace:', err)
+      notify('Enlace copiado al portapapeles 📋')
+    } catch {
+      notify('No se pudo copiar el enlace')
     }
   }
 }
 
-// Montar y refrescar datos
-let intervalId
+// Ciclo de vida corregido
+let intervalId = null
+
 onMounted(() => {
   fetchMetadata()
-  onMounted(() => {
-    fetchMetadata()
+  intervalId = setInterval(fetchMetadata, 30000)
+})
 
-    setInterval(fetchMetadata, 60000)
-
-    onUnmounted(() => clearInterval(intervalId))
-
-  })
+onUnmounted(() => {
+  if (intervalId) clearInterval(intervalId)
 })
 </script>
 

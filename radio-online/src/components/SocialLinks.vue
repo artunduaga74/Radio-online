@@ -1,18 +1,48 @@
 <template>
-    <v-container class="text-center py-4">
-        <v-btn icon href="https://www.facebook.com/profile.php?id=61579605448786"
-            target="_blank"><v-icon>mdi-facebook</v-icon></v-btn>
-        <v-btn icon href="https://www.youtube.com/@fernandomiranda1709"
-            target="_blank"><v-icon>mdi-youtube</v-icon></v-btn>
+    <v-container class="py-6">
+        <div class="text-center mb-4">
+            <h2 class="text-h5 font-weight-bold mb-1">🌐 Síguenos</h2>
+            <p class="text-caption text-medium-emphasis">Encuéntranos en redes sociales</p>
+        </div>
 
-        <!-- Spotify -->
-        <v-btn icon href="https://open.spotify.com/show/4VZFQ816UPQzJfhEPAIqEH" target="_blank">
-            <v-icon>mdi-spotify</v-icon>
-        </v-btn>
+        <v-row justify="center" class="ga-3">
+            <v-col v-for="link in socialLinks" :key="link.label" cols="auto">
+                <v-btn
+                    :color="link.color"
+                    variant="tonal"
+                    :prepend-icon="link.icon"
+                    :href="link.url"
+                    target="_blank"
+                    rounded="lg"
+                    size="large">
+                    {{ link.label }}
+                </v-btn>
+            </v-col>
+        </v-row>
     </v-container>
 </template>
 
 <script setup>
+const socialLinks = [
+    {
+        label: 'Facebook',
+        icon: 'mdi-facebook',
+        color: 'blue',
+        url: 'https://www.facebook.com/profile.php?id=61579605448786'
+    },
+    {
+        label: 'YouTube',
+        icon: 'mdi-youtube',
+        color: 'red',
+        url: 'https://www.youtube.com/@fernandomiranda1709'
+    },
+    {
+        label: 'Spotify',
+        icon: 'mdi-spotify',
+        color: 'green',
+        url: 'https://open.spotify.com/show/4VZFQ816UPQzJfhEPAIqEH'
+    },
+]
 </script>
 
 <style scoped></style>

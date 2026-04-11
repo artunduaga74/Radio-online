@@ -1,26 +1,63 @@
 import { ref } from 'vue';
 
-// Estado global (sigue igual)
-export const activeAudioSource = ref(null);
+// Estado global
+export const activeAudioSource = ref(null); // 'radio' | 'spotify' | null
+export const isReconnecting = ref(false);
 
 // --- Radio ---
 let audioInstance = null;
+let currentStreamUrl = null;
+let reconnectTimeout = null;
+
+function scheduleReconnect() {
+  if (reconnectTimeout) return;
+  isReconnecting.value = true;
+  reconnectTimeout = setTimeout(() => {
+    reconnectTimeout = null;
+    if (activeAudioSource.value === 'radio' && currentStreamUrl) {
+      audioInstance.src = currentStreamUrl;
+      audioInstance.play().catch(() => scheduleReconnect());
+    }
+  }, 5000);
+}
 
 export function playRadio(streamUrl) {
+  currentStreamUrl = streamUrl;
   activeAudioSource.value = 'radio';
-  // Detenemos Spotify usando su nuevo controlador
+
   if (spotifyController) {
     spotifyController.pause();
   }
-  // ... resto de la lógica de la radio ...
+
   if (!audioInstance) {
-    audioInstance = new Audio(streamUrl);
+    audioInstance = new Audio();
+
+    audioInstance.addEventListener('error', () => {
+      if (activeAudioSource.value === 'radio') {
+        scheduleReconnect();
+      }
+    });
+
+    audioInstance.addEventListener('playing', () => {
+      isReconnecting.value = false;
+      if (reconnectTimeout) {
+        clearTimeout(reconnectTimeout);
+        reconnectTimeout = null;
+      }
+    });
   }
+
   audioInstance.src = streamUrl;
-  audioInstance.play();
+  audioInstance.play().catch(() => scheduleReconnect());
 }
 
 export function stopRadio() {
+  if (reconnectTimeout) {
+    clearTimeout(reconnectTimeout);
+    reconnectTimeout = null;
+  }
+  isReconnecting.value = false;
+
   if (audioInstance) {
     audioInstance.pause();
   }
@@ -30,24 +67,18 @@ export function stopRadio() {
 }
 
 // --- Spotify ---
-// Nueva variable para guardar el controlador de la API
 let spotifyController = null;
 
-// Función para almacenar el controlador cuando esté listo
 export function setSpotifyController(controller) {
   spotifyController = controller;
 
-  // Escuchamos cuando el usuario da PLAY dentro del iframe
   spotifyController.addListener('playback_started', () => {
-    console.log('Spotify ha comenzado a reproducir.');
-    // Avisamos a la app y detenemos la radio
     activeAudioSource.value = 'spotify';
     stopRadio();
   });
 }
 
-// Función para que Spotify anuncie que quiere sonar
 export function setSpotifyAsActive() {
   activeAudioSource.value = 'spotify';
-  stopRadio(); // Detenemos la radio explícitamente
+  stopRadio();
 }

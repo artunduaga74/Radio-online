@@ -1,7 +1,9 @@
 // src/firebase.js
-import { initializeApp } from "firebase/app";
-import { getPerformance } from "firebase/performance";
-import { getAnalytics } from "firebase/analytics";
+import { initializeApp } from "firebase/app"
+import { getPerformance } from "firebase/performance"
+import { getAnalytics } from "firebase/analytics"
+import { getAuth } from "firebase/auth"
+import { getFirestore } from "firebase/firestore"
 
 const firebaseConfig = {
   apiKey: "AIzaSyCOePpaVacfR5xnQOPGqMbcWvYNLMBqjWQ",
@@ -10,15 +12,14 @@ const firebaseConfig = {
   storageBucket: "filadelfia-b6238.firebasestorage.app",
   messagingSenderId: "48149883887",
   appId: "1:48149883887:web:f7ba45751f712c81c5241a",
-  measurementId: "G-DV7QMEM4C5" // necesario para performance
-};
+  measurementId: "G-DV7QMEM4C5"
+}
 
-// Inicializa Firebase
-const app = initializeApp(firebaseConfig);
-// Habilita Analizis de uso
-const Analytics = getAnalytics(app);
+const app = initializeApp(firebaseConfig)
 
-// Habilita Performance Monitoring
-const perf = getPerformance(app);
+export const analytics = getAnalytics(app)
+export const perf = getPerformance(app)
+export const auth = getAuth(app)
+export const db = getFirestore(app)
 
-export { app, perf, Analytics };
+export { app }
