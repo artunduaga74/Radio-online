@@ -5,7 +5,8 @@
  */
 
 // Styles
-import '@mdi/font/css/materialdesignicons.css'
+
+import '@mdi/font/css/materialdesignicons.css' // 👈 esto trae solo los iconos
 import 'vuetify/styles'
 
 // Composables
@@ -16,4 +17,8 @@ export default createVuetify({
   theme: {
     defaultTheme: 'system',
   },
+    defaultAssets: {
+    font: false, // ❌ no cargar Roboto automático
+    icons: 'mdi'
+    }
 })

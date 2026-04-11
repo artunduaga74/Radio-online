@@ -6,7 +6,7 @@
             target="_blank"><v-icon>mdi-youtube</v-icon></v-btn>
 
         <!-- Spotify -->
-        <v-btn icon href="https://open.spotify.com/show/tu-id-del-podcast" target="_blank">
+        <v-btn icon href="https://open.spotify.com/show/4VZFQ816UPQzJfhEPAIqEH" target="_blank">
             <v-icon>mdi-spotify</v-icon>
         </v-btn>
     </v-container>

@@ -3,7 +3,7 @@
     <v-card class="player-card pa-4" elevation="6" width="250">
 
       <!-- Carátula del álbum -->
-      <v-img :src="coverImage" class=" mx-auto mb-4" max-width="125" max-height="125" />
+      <v-img :src="coverImage" class="mx-auto mb-4" max-width="125" max-height="125" />
 
       <!-- Nombre de la canción -->
       <h3 class="text-center">{{ currentSong || 'Cargando audio...' }}</h3>
@@ -12,8 +12,8 @@
       <!-- Controles -->
       <div class="d-flex justify-center align-center my-4">
         <v-btn icon @click="togglePlay" color="primary" class="mx-2" width="50" height="50">
-          <v-icon v-if="!isPlaying">mdi-play-circle</v-icon>
-          <v-icon v-else>mdi-pause-circle</v-icon>
+          <img v-if="!isPlaying" src="@/assets/icons/play.svg" alt="Play" width="40" height="40" />
+          <img v-else src="@/assets/icons/pause.svg" alt="Pause" width="40" height="40" />
         </v-btn>
         <v-btn icon @click="stop" color="error" class="mx-2">
           <v-icon>mdi-stop-circle</v-icon>
@@ -31,81 +31,69 @@
   </v-container>
 </template>
 
-<script setup>
-import portadaLocal from '@/assets/icono.png'
-import { ref, onMounted, onUnmounted } from 'vue'
 
-// URL del stream
-const defaultCentovaCover = "https://cast1.my-control-panel.com/static/nonefern/covers/nocover.png";
+<script setup>
+// Importamos el estado global y las funciones del manager
+import { computed } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue';
+// Importamos el estado global del audio
+import { activeAudioSource, playRadio, stopRadio } from '@/utils/audioManager'
+// Importamos el icono para los nocovers de asurahosting
+import portadaLocal from '@/assets/icono.png'
+
+// Configuración radio asignar portada default
+const defaultCentovaCover = "https://cast1.asurahosting.com/static/nonefern/covers/nocover.png";
 const defaultAppCover = portadaLocal;
+// Cargando el stream de radio 
 const streamUrl = 'https://cast1.my-control-panel.com/proxy/nonefern/stream'
-const audio = new Audio(streamUrl)
-audio.crossOrigin = 'anonymous'
-audio.volume = 0.8
+//----administrar audio global-----//
 
 // Estados
-const isPlaying = ref(false)
+// cambieré este codigo isplaying = ref(false) x este const isPlaying = computed(() => activeAudioSource.value === 'radio');
+const isPlaying = computed(() => activeAudioSource.value === 'radio');
 const currentSong = ref('')
 const currentArtist = ref('')
-const coverImage = ref('') // Por defecto logo local
+const coverImage = ref(defaultAppCover)
 
-// URL de imagen por defecto en Firebase
-const defaultCoverUrl = "https://firebasestorage.googleapis.com/v0/b/filadelfia-b6238.firebasestorage.app/o/filadelfia%20logo.https://firebasestorage.googleapis.com/v0/b/filadelfia-b6238.firebasestorage.app/o/filadelfia%20logo.png?alt=media&token=52376588-b1ec-4b13-9640-50d48d8af3f9"
-
-// Funciones de control
+// Funciones de control de audio play
 const togglePlay = () => {
   if (isPlaying.value) {
-    audio.pause()
+    // Llama a la función del manager
+    stopRadio();
   } else {
-    audio.play()
+    // Llama a la función del manager
+    playRadio(streamUrl);
   }
-  isPlaying.value = !isPlaying.value
-}
+};
 
-const stop = () => {
-  audio.pause()
-  audio.currentTime = 0
-  isPlaying.value = false
-}
-
-// Obtener metadatos de la canción
+// Obtener metadatos
 const fetchMetadata = async () => {
   try {
     const res = await fetch('https://cast1.asurahosting.com/rpc/nonefern/streaminfo.get')
     const json = await res.json()
 
-    if (json.data && json.data.length > 0 && json.data[0].track) {
+    if (json.data?.[0]?.track) {
       const track = json.data[0].track
-      currentSong.value = track.title || 'La Voz de filadelfia'
+      currentSong.value = track.title || 'La Voz de Filadelfia'
       currentArtist.value = track.artist || 'Tema Especial'
 
-      // Verificar si la imagen es la genérica de Centova Cast
       if (!track.imageurl || track.imageurl === defaultCentovaCover) {
         coverImage.value = defaultAppCover;
       } else {
         coverImage.value = track.imageurl;
       }
-
-      //consola para conocer el archivo json. Desactivar backslash
-      //console.log({
-      // json: track,
-      // Canción: currentSong.value,
-      // Artista: currentArtist.value,
-      // Portada: coverImage.value
-      //});
     }
   } catch (err) {
     console.error('Error obteniendo metadatos:', err)
     currentSong.value = 'No disponible'
     currentArtist.value = ''
-    coverImage.value = defaultCoverUrl
+    coverImage.value = defaultAppCover
   }
 }
 
 // Compartir la emisora
 const shareStation = async () => {
   const shareData = {
-    //title: 'La Voz de Filadelfia',
     text: 'Escucha la transmisión 📻 La Voz de Filadelfia.. ',
     url: window.location.origin
   }
@@ -118,7 +106,6 @@ const shareStation = async () => {
       console.error('Error al compartir:', err)
     }
   } else {
-    // Fallback: copiar enlace al portapapeles
     try {
       await navigator.clipboard.writeText(shareData.url)
       alert('Enlace copiado al portapapeles 📋')
@@ -129,11 +116,17 @@ const shareStation = async () => {
 }
 
 // Montar y refrescar datos
+let intervalId
 onMounted(() => {
   fetchMetadata()
-  setInterval(fetchMetadata, 60000)
-  onUnmounted(() => clearInterval(intervalId))
+  onMounted(() => {
+    fetchMetadata()
 
+    setInterval(fetchMetadata, 60000)
+
+    onUnmounted(() => clearInterval(intervalId))
+
+  })
 })
 </script>
 

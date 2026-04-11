@@ -1,5 +1,5 @@
 <template>
-    <v-btn icon large color="green" class="whatsapp-btn" href="https://wa.me/+50762254433" target="_blank">
+    <v-btn icon large color="green" class="whatsapp-btn" href="https://wa.me/+50764175859" target="_blank">
         <v-icon size="36">mdi-whatsapp</v-icon>
     </v-btn>
 </template>
