@@ -2,8 +2,8 @@
   <v-container class="d-flex justify-center">
     <v-card class="player-card pa-4" elevation="6" width="280">
 
-      <!-- Badge EN VIVO / RECONECTANDO -->
-      <div class="d-flex justify-center mb-2">
+      <!-- Badge EN VIVO / RECONECTANDO + oyentes -->
+      <div class="d-flex justify-center align-center ga-2 mb-2">
         <v-chip v-if="isReconnecting" color="warning" size="small" prepend-icon="mdi-refresh">
           Reconectando...
         </v-chip>
@@ -12,6 +12,9 @@
         </v-chip>
         <v-chip v-else color="grey" size="small" prepend-icon="mdi-broadcast-off">
           FUERA DE AIRE
+        </v-chip>
+        <v-chip v-if="listenerCount > 0" color="primary" variant="tonal" size="small" prepend-icon="mdi-headphones">
+          {{ listenerCount }}
         </v-chip>
       </div>
 
@@ -53,7 +56,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { activeAudioSource, playRadio, stopRadio, isReconnecting } from '@/utils/audioManager'
 import portadaLocal from '@/assets/icono.png'
 
@@ -63,9 +66,10 @@ const streamUrl = 'https://cast1.my-control-panel.com/proxy/nonefern/stream'
 
 // Estado del reproductor
 const isPlaying = computed(() => activeAudioSource.value === 'radio')
-const currentSong = ref('')
+const currentSong   = ref('')
 const currentArtist = ref('')
-const coverImage = ref(defaultAppCover)
+const coverImage    = ref(defaultAppCover)
+const listenerCount = ref(0)
 const snackbar = ref(false)
 const snackbarMsg = ref('')
 
@@ -93,11 +97,13 @@ const fetchMetadata = async () => {
     const json = await res.json()
     if (json.data?.[0]?.track) {
       const track = json.data[0].track
-      currentSong.value = track.title || 'La Voz de Filadelfia'
+      currentSong.value   = track.title  || 'La Voz de Filadelfia'
       currentArtist.value = track.artist || 'Tema Especial'
-      coverImage.value = (!track.imageurl || track.imageurl === defaultCentovaCover)
+      coverImage.value    = (!track.imageurl || track.imageurl === defaultCentovaCover)
         ? defaultAppCover
         : track.imageurl
+      listenerCount.value = json.data?.[0]?.stream?.listeners ?? 0
+      if (isPlaying.value) updateMediaSession()
     }
   } catch {
     currentSong.value = 'La Voz de Filadelfia'
@@ -127,6 +133,31 @@ const shareStation = async () => {
     }
   }
 }
+
+// Media Session API — controles en pantalla de bloqueo
+const updateMediaSession = () => {
+  if (!('mediaSession' in navigator)) return
+
+  navigator.mediaSession.metadata = new MediaMetadata({
+    title:  currentSong.value  || 'La Voz de Filadelfia',
+    artist: currentArtist.value || 'Tema Especial',
+    artwork: [
+      { src: coverImage.value, sizes: '192x192', type: 'image/png' },
+      { src: coverImage.value, sizes: '512x512', type: 'image/png' },
+    ]
+  })
+
+  navigator.mediaSession.setActionHandler('play',  () => playRadio(streamUrl))
+  navigator.mediaSession.setActionHandler('pause', () => stopRadio())
+  navigator.mediaSession.setActionHandler('stop',  () => stopRadio())
+}
+
+// Actualizar estado play/pausa en la pantalla de bloqueo
+watch(isPlaying, (playing) => {
+  if (!('mediaSession' in navigator)) return
+  navigator.mediaSession.playbackState = playing ? 'playing' : 'paused'
+  if (playing) updateMediaSession()
+})
 
 // Ciclo de vida corregido
 let intervalId = null

@@ -1,8 +1,25 @@
 import { ref } from 'vue';
 
 // Estado global
-export const activeAudioSource = ref(null); // 'radio' | 'spotify' | null
+// 'radio' | 'spotify' | 'himnario' | 'devocional' | null
+export const activeAudioSource = ref(null);
 export const isReconnecting = ref(false);
+
+// ── Registro de callbacks de parada para cada fuente ──────────────
+const _stopCallbacks = {};
+
+/** Registra la función que detiene una fuente de audio */
+export function registerStopCallback(source, fn) {
+  _stopCallbacks[source] = fn;
+}
+
+/** Detiene todas las fuentes excepto la indicada */
+export function stopAllExcept(source) {
+  Object.keys(_stopCallbacks).forEach(s => {
+    if (s !== source) _stopCallbacks[s]?.();
+  });
+  if (source !== 'radio') stopRadio();
+}
 
 // --- Radio ---
 let audioInstance = null;
@@ -23,6 +40,8 @@ function scheduleReconnect() {
 
 export function playRadio(streamUrl) {
   currentStreamUrl = streamUrl;
+  // Detener himnario/devocional si estaban sonando
+  Object.keys(_stopCallbacks).forEach(s => _stopCallbacks[s]?.());
   activeAudioSource.value = 'radio';
 
   if (spotifyController) {

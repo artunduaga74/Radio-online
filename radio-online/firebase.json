@@ -1,5 +1,9 @@
 {
+  "functions": {
+    "source": "functions"
+  },
   "hosting": {
+    "site": "filadelfia-b6238",
     "public": "dist",
     "ignore": [
       "firebase.json",

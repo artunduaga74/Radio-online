@@ -23,26 +23,14 @@
 </template>
 
 <script setup>
-const socialLinks = [
-    {
-        label: 'Facebook',
-        icon: 'mdi-facebook',
-        color: 'blue',
-        url: 'https://www.facebook.com/profile.php?id=61579605448786'
-    },
-    {
-        label: 'YouTube',
-        icon: 'mdi-youtube',
-        color: 'red',
-        url: 'https://www.youtube.com/@fernandomiranda1709'
-    },
-    {
-        label: 'Spotify',
-        icon: 'mdi-spotify',
-        color: 'green',
-        url: 'https://open.spotify.com/show/4VZFQ816UPQzJfhEPAIqEH'
-    },
-]
-</script>
+import { computed } from 'vue'
+import { useAppConfig } from '@/utils/useAppConfig'
 
-<style scoped></style>
+const { config } = useAppConfig()
+
+const socialLinks = computed(() => [
+    { label: 'Facebook', icon: 'mdi-facebook', color: 'blue',  url: config.value.facebook },
+    { label: 'YouTube',  icon: 'mdi-youtube',  color: 'red',   url: config.value.youtube  },
+    { label: 'Spotify',  icon: 'mdi-spotify',  color: 'green', url: config.value.spotify  },
+].filter(l => !!l.url))
+</script>
