@@ -88,6 +88,7 @@
 <script setup>
 import { ref, watch, onMounted } from 'vue'
 import { listenForegroundNotifications } from '@/utils/usePushNotifications'
+import { stopAll } from '@/utils/audioManager'
 import Header        from './components/Header.vue'
 import LivePlayer    from './components/LivePlayer.vue'
 import OnDemand      from './components/OnDemand.vue'
@@ -104,8 +105,11 @@ import InstallPrompt  from './components/InstallPrompt.vue'
 
 const page = ref('inicio')
 
-// Scroll al tope al cambiar de sección
-watch(page, () => window.scrollTo({ top: 0, behavior: 'smooth' }))
+// Al cambiar de sección: detener audio y scroll al tope
+watch(page, () => {
+  stopAll()
+  window.scrollTo({ top: 0, behavior: 'smooth' })
+})
 
 onMounted(() => {
   // Escuchar notificaciones en primer plano si ya tiene permiso

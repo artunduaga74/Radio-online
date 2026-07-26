@@ -31,7 +31,7 @@ export default defineConfig({
     }),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['icono.png'],
+      includeAssets: ['icon-192.png', 'icon-512.png', 'icon-maskable-512.png', 'apple-touch-icon.png', 'favicon.png'],
       manifest: {
         name: 'La Voz de Filadelfia',
         short_name: 'Radio Filadelfia',
@@ -44,19 +44,19 @@ export default defineConfig({
         start_url: '/',
         icons: [
           {
-            src: '/icono.png',
+            src: '/icon-192.png',
             sizes: '192x192',
             type: 'image/png',
             purpose: 'any'
           },
           {
-            src: '/icono.png',
+            src: '/icon-512.png',
             sizes: '512x512',
             type: 'image/png',
             purpose: 'any'
           },
           {
-            src: '/logo-redondo.png',
+            src: '/icon-maskable-512.png',
             sizes: '512x512',
             type: 'image/png',
             purpose: 'maskable'
@@ -88,6 +88,13 @@ export default defineConfig({
       }
     }),
   ],
+  build: {
+    // Embeber la fuente MDI woff2 directamente en el CSS como base64.
+    // Así los iconos quedan dentro del bundle y funcionan sin internet.
+    assetsInlineLimit(filePath) {
+      if (filePath.endsWith('.woff2')) return true
+    },
+  },
   optimizeDeps: {
     exclude: ['vuetify'],
   },

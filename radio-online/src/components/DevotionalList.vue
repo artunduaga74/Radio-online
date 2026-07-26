@@ -9,6 +9,18 @@
       Reflexiones y mensajes del pastor
     </p>
 
+    <!-- Banner sin conexión -->
+    <v-alert
+      v-if="isOffline"
+      type="warning"
+      variant="tonal"
+      density="compact"
+      icon="mdi-wifi-off"
+      rounded="lg"
+      class="mb-3">
+      Sin conexión — mostrando devocionales guardados
+    </v-alert>
+
     <!-- Búsqueda + modo selección -->
     <div class="d-flex align-center gap-2 mb-2">
       <v-text-field
@@ -144,7 +156,15 @@
         <!-- Panel expandido: reflexión + botón audio -->
         <v-expand-transition>
           <div v-if="expandedId === d.id" class="devo-expand-panel">
-            <div class="devo-reflexion" v-html="d.reflexion" />
+            <div class="devo-reflexion-header">
+              <v-icon size="14" class="mr-1" color="primary">mdi-book-open-variant</v-icon>
+              <span>{{ d.titulo }}</span>
+              <div class="devo-reflexion-size-btns">
+                <button class="devo-size-btn" title="Reducir texto" @click.stop="reflexionFontSize = Math.max(10, reflexionFontSize - 1)">A−</button>
+                <button class="devo-size-btn" title="Aumentar texto" @click.stop="reflexionFontSize = Math.min(22, reflexionFontSize + 1)">A+</button>
+              </div>
+            </div>
+            <div class="devo-reflexion" :style="{ fontSize: reflexionFontSize + 'px' }" v-html="d.reflexion" />
             <div class="devo-expand-actions">
               <v-btn
                 size="small" variant="tonal" color="green"
@@ -163,6 +183,28 @@
     <p v-if="!loading && filtrados.length > 0" class="text-caption text-center text-medium-emphasis mt-2 mb-2">
       {{ filtrados.length }} devocional{{ filtrados.length !== 1 ? 'es' : '' }}
     </p>
+
+    <!-- Error de descarga -->
+    <v-snackbar
+      :model-value="!!downloadError"
+      color="error"
+      location="top"
+      :timeout="5000"
+      rounded="lg">
+      <v-icon size="18" class="mr-2">mdi-wifi-off</v-icon>
+      {{ downloadError }}
+    </v-snackbar>
+
+    <!-- Devocional no descargado (offline) -->
+    <v-snackbar
+      :model-value="!!offlinePlayMsg"
+      color="warning"
+      location="top"
+      :timeout="4000"
+      rounded="lg">
+      <v-icon size="18" class="mr-2">mdi-download-off</v-icon>
+      {{ offlinePlayMsg }}
+    </v-snackbar>
 
     <!-- ═══ MINI REPRODUCTOR ═══ -->
     <v-slide-y-reverse-transition>
@@ -227,15 +269,23 @@
 <script setup>
 import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import { collection, onSnapshot, orderBy, query } from 'firebase/firestore'
-import { db } from '@/firebase'
+import { ref as storageRef, getBlob } from 'firebase/storage'
+import { db, storage } from '@/firebase'
 import { activeAudioSource, registerStopCallback, stopAllExcept } from '@/utils/audioManager'
+import { saveAudio, getBlobUrl, getAllKeys } from '@/utils/useOfflineAudio'
+
+// ── Conexión ─────────────────────────────────────────────────────
+const isOffline = ref(!navigator.onLine)
+const _onOnline  = () => { isOffline.value = false }
+const _onOffline = () => { isOffline.value = true }
 
 // ── Estado ───────────────────────────────────────────────────────
 const search      = ref('')
 const showFavOnly = ref(false)
 const loading     = ref(true)
 const devotionals = ref([])
-const expandedId  = ref(null)
+const expandedId       = ref(null)
+const reflexionFontSize = ref(13)
 const playingId   = ref(null)
 const isPaused    = ref(false)
 const playingDevo = computed(() => devotionals.value.find(d => d.id === playingId.value))
@@ -248,44 +298,52 @@ const toggleFavorite = (id) => {
   localStorage.setItem('devo_favorites', JSON.stringify([...favorites]))
 }
 
-// ── Descargas ────────────────────────────────────────────────────
-const downloadedIds = reactive(new Set(JSON.parse(localStorage.getItem('devo_downloaded') || '[]')))
+// ── Descargas / caché offline (IndexedDB) ────────────────────────
+const downloadedIds = reactive(new Set())
 const downloadingId = ref(null)
+
+const syncDownloadedIds = async () => {
+  const keys = await getAllKeys()
+  keys.filter(k => k.startsWith('devo_')).forEach(k => downloadedIds.add(k.replace('devo_', '')))
+}
+
+const downloadError  = ref('')
+const offlinePlayMsg = ref('')
 
 const downloadDevo = async (d) => {
   if (downloadingId.value) return
   downloadingId.value = d.id
+  downloadError.value = ''
   try {
-    const res  = await fetch(d.audioUrl)
-    const blob = await res.blob()
-    const ext  = d.audioUrl.includes('.mp3') ? 'mp3' : 'webm'
-    const name = `${d.titulo}.${ext}`
+    const timeout = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('Tiempo de espera agotado. Verifica tu conexión.')), 20000)
+    )
+    const blob = await Promise.race([
+      d.audioPath
+        ? getBlob(storageRef(storage, d.audioPath))
+        : fetch(d.audioUrl).then(r => r.blob()),
+      timeout,
+    ])
 
-    if ('showSaveFilePicker' in window) {
-      try {
-        const handle = await showSaveFilePicker({
-          suggestedName: name,
-          startIn: 'music',
-          types: [{ description: 'Audio', accept: { 'audio/*': ['.mp3', '.webm', '.ogg'] } }],
-        })
-        const writable = await handle.createWritable()
-        await writable.write(blob)
-        await writable.close()
-      } catch (e) {
-        if (e.name === 'AbortError') { downloadingId.value = null; return }
-        throw e
-      }
-    } else {
-      const url = URL.createObjectURL(blob)
-      const a   = Object.assign(document.createElement('a'), { href: url, download: name })
-      document.body.appendChild(a); a.click()
-      document.body.removeChild(a)
-      setTimeout(() => URL.revokeObjectURL(url), 2000)
-    }
+    // 1. Guardar en caché del navegador (para reproducir offline dentro de la app)
+    await saveAudio(`devo_${d.id}`, blob, { titulo: d.titulo, type: 'devo' })
     downloadedIds.add(d.id)
-    localStorage.setItem('devo_downloaded', JSON.stringify([...downloadedIds]))
-  } catch { /* fallo silencioso */ }
-  finally { downloadingId.value = null }
+
+    // 2. Descargar archivo real al dispositivo (carpeta Descargas del celular/PC)
+    const fileUrl = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = fileUrl
+    a.download = `${d.titulo}.mp3`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(fileUrl)
+  } catch (e) {
+    downloadError.value = e.message.includes('agotado')
+      ? e.message
+      : 'No se pudo descargar. Verifica tu conexión.'
+    setTimeout(() => { downloadError.value = '' }, 5000)
+  } finally { downloadingId.value = null }
 }
 
 // ── Selección / cola ─────────────────────────────────────────────
@@ -357,14 +415,22 @@ const shortMonth = (ts) => {
 // ── Firestore ────────────────────────────────────────────────────
 let unsubscribe = null
 onMounted(() => {
+  window.addEventListener('online',  _onOnline)
+  window.addEventListener('offline', _onOffline)
   registerStopCallback('devocional', stopDevo)
+  syncDownloadedIds()
   const q = query(collection(db, 'devotionals'), orderBy('createdAt', 'desc'))
   unsubscribe = onSnapshot(q, (snap) => {
     devotionals.value = snap.docs.map(d => ({ id: d.id, ...d.data() }))
     loading.value = false
   })
 })
-onUnmounted(() => { unsubscribe?.(); stopDevo() })
+onUnmounted(() => {
+  window.removeEventListener('online',  _onOnline)
+  window.removeEventListener('offline', _onOffline)
+  unsubscribe?.()
+  stopDevo()
+})
 
 // Detener si otra fuente toma el control
 watch(activeAudioSource, (src) => { if (src && src !== 'devocional') stopDevo() })
@@ -380,21 +446,37 @@ const setSpeed = (sp) => {
 }
 
 // ── Audio ────────────────────────────────────────────────────────
-let devoAudio = null
+let devoAudio   = null
+let blobRevoke  = null
 
-const playDirect = (d) => {
+const playDirect = async (d) => {
   if (!d.audioUrl) return
-  stopAllExcept('devocional')           // detiene radio, himnario, spotify
+
+  // Verificar caché antes de hacer cualquier cosa
+  const cached = await getBlobUrl(`devo_${d.id}`)
+
+  // Sin conexión y sin caché → notificar y NO abrir el reproductor
+  if (isOffline.value && !cached) {
+    offlinePlayMsg.value = `"${d.titulo}" no está descargado. Toca ↓ para descargarlo.`
+    setTimeout(() => { offlinePlayMsg.value = '' }, 4000)
+    return
+  }
+
+  stopAllExcept('devocional')
   activeAudioSource.value = 'devocional'
   if (devoAudio) { devoAudio.pause(); devoAudio = null }
+  if (blobRevoke) { blobRevoke(); blobRevoke = null }
   playbackSpeed.value = 1
-  devoAudio = new Audio(d.audioUrl)
+
+  const src = cached ? cached.url : d.audioUrl
+  if (cached) blobRevoke = cached.revoke
+
+  devoAudio = new Audio(src)
   devoAudio.playbackRate = 1
   devoAudio.play()
   devoAudio.onended = () => nextDevo()
-  playingId.value = d.id
-  isPaused.value  = false
-  // Auto-expandir para ver el texto
+  playingId.value  = d.id
+  isPaused.value   = false
   expandedId.value = d.id
 }
 
@@ -406,6 +488,7 @@ const togglePause = () => {
 
 const stopDevo = () => {
   if (devoAudio) { devoAudio.pause(); devoAudio = null }
+  if (blobRevoke) { blobRevoke(); blobRevoke = null }
   playingId.value  = null
   isPaused.value   = false
   queue.value      = []
@@ -568,11 +651,36 @@ const prevDevo = () => {
 .devo-expand-panel {
   background: rgba(var(--v-theme-primary), 0.04);
   border-bottom: 1px solid rgba(var(--v-border-color), 0.07);
-  padding: 12px 14px;
+  padding: 10px 14px 14px;
 }
-.devo-reflexion {
-  font-size: 13px;
+.devo-reflexion-header {
+  display: flex;
+  align-items: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: rgb(var(--v-theme-primary));
+  margin-bottom: 8px;
+  gap: 2px;
+}
+.devo-reflexion-size-btns {
+  display: flex;
+  gap: 3px;
+  margin-left: auto;
+}
+.devo-size-btn {
+  background: rgba(var(--v-theme-primary), 0.1);
+  border: none;
+  border-radius: 5px;
+  padding: 1px 6px;
+  font-size: 10px;
+  font-weight: 700;
+  color: rgb(var(--v-theme-primary));
+  cursor: pointer;
   line-height: 1.6;
+}
+.devo-size-btn:hover { background: rgba(var(--v-theme-primary), 0.2); }
+.devo-reflexion {
+  line-height: 1.7;
   color: rgba(var(--v-theme-on-surface), 0.85);
   margin: 0 0 10px;
 }

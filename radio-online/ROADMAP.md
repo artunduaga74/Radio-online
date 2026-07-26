@@ -7,6 +7,40 @@
 
 ## Estado actual (completado ✅)
 
+- [x] **Íconos MDI offline** — fuente woff2 embebida como base64 dentro del CSS (vite.config.mjs
+      `assetsInlineLimit`). Los íconos funcionan sin internet desde el primer deploy.
+      CSS pasó de 725KB a 1,263KB; no existe archivo woff2 separado en el bundle.
+- [x] **Audio global — stopAll()** — `audioManager.js` tiene `stopAll()` que detiene radio,
+      himnario y devocional a la vez. Se llama al cambiar de sección y al abrir AdminPanel.
+- [x] **AdminPanel — tabs siempre visibles** — layout con flexbox en v-card:
+      `d-flex flex-column / height:100%`, header+tabs con `flex-shrink:0`,
+      v-card-text con `flex:1; overflow-y:auto; min-height:0`. Tabs nunca se ocultan.
+- [x] **Guard offline HymnList** — si el himno no está en IndexedDB y no hay internet,
+      muestra snackbar de advertencia y NO abre el reproductor.
+- [x] **Guard offline DevotionalList** — igual que HymnList para devocionales.
+- [x] **Banner sin conexión** — HymnList y DevotionalList muestran un alert amarillo
+      "Sin conexión — mostrando contenido guardado" cuando `navigator.onLine === false`.
+- [x] **Detener audio al navegar** — `watch(page)` en App.vue llama `stopAll()` al cambiar sección.
+- [x] **Detener audio al entrar AdminPanel** — `openDrawer()` llama `stopAll()` antes de abrir.
+- [x] Descarga offline con IndexedDB — himnos y devocionales se guardan en el navegador
+      con `useOfflineAudio.js`. El reproductor lee de IndexedDB primero (offline),
+      y si no existe usa la URL remota (online). Ícono ✅ verde cuando está en caché.
+- [x] Timeout 12s en descarga de himnos y devocionales — si CORS bloquea la descarga,
+      aparece un snackbar rojo de error en vez de un spinner infinito. `Promise.race()`.
+- [x] Categorías predefinidas en admin himnario — lista de 16 categorías estándar más
+      cualquier categoría extra ya usada en himnos subidos. El campo sigue siendo libre.
+- [x] Tamaño de texto A+/A− en devocionales — igual que en el himnario (botones en el
+      encabezado del panel expandido). Rango 10–22px, persiste mientras la sesión esté abierta.
+- [x] Barra flotante de formato en editores (AdminPanel) — aparece al seleccionar texto,
+      doble clic = palabra, triple clic = párrafo. Negrita, cursiva, alineación.
+- [x] Pegado sin formato en editores — `Ctrl+V` inserta solo texto plano, sin estilos externos.
+- [x] Menú clic derecho en editores de himnario y devocional (PC).
+- [x] Ícono auricular eliminado de la lista de devocionales.
+- [x] Descarga en fila para devocionales (igual que himnario).
+- [x] Espacio izquierdo del panel expandido de devocional eliminado.
+
+
+
 - [x] Radio en vivo con metadatos (Centova Cast)
 - [x] Badge EN VIVO / FUERA DE AIRE / RECONECTANDO
 - [x] Reconexión automática si el stream falla
@@ -279,6 +313,52 @@ Si Centova guarda grabaciones, listarlas como "Transmisiones pasadas".
 
 **Recomendación:** Firebase Storage para himnos grabados por la iglesia +
 Archive.org para complementar con himnos clásicos de dominio público.
+
+---
+
+---
+
+## PENDIENTE — Retomar próxima sesión
+
+### Offline — Estado tras sesión de abril 17, 2026
+- **Íconos offline** ✅ — woff2 embebido en CSS. Deploy hecho. El usuario debe abrir la app
+  CON internet una vez para que el nuevo SW se instale; después funcionan offline.
+- **Guard offline HymnList / DevotionalList** ✅ — código desplegado.
+- **Banner sin conexión** ✅ — código desplegado.
+- **Verificar en celular** — usuario debe confirmar que íconos aparecen offline y que los guards funcionan.
+
+### Mejoras pendientes para offline
+- [ ] **Gestionar almacenamiento** — mostrar cuánto espacio usan los archivos guardados
+      y botón para borrar caché individual o total (usar `deleteAudio` de `useOfflineAudio.js`)
+- [ ] **Descarga masiva** — botón "Descargar todos los favoritos" en himnario/devocional
+- [ ] **Formateo de texto en editores** — botones de formato (barra flotante + clic derecho)
+      están implementados pero pendiente verificar que `syncEditor()` funciona correctamente
+      en todos los casos (especialmente `removeFormat`)
+
+### Config app desde admin (Fase A.1) — Pendiente
+- [ ] Nombre y slogan desde Firestore (actualmente hardcodeados en Header.vue)
+- [ ] WhatsApp y redes sociales desde Firestore (actualmente en `useAppConfig.js`)
+
+### CORS Firebase Storage — Pendiente (bloquea descarga offline de himnos/devocionales)
+
+El archivo `cors.json` ya existe en `radio-online/cors.json`. Falta aplicarlo.
+
+**Opción A — Google Cloud SDK (gsutil):**
+1. Instalar desde: https://cloud.google.com/sdk/docs/install
+2. En terminal: `gcloud auth login`
+3. Luego: `gsutil cors set cors.json gs://filadelfia-b6238.firebasestorage.app`
+
+**Opción B — Google Cloud Console (sin instalar nada):**
+1. Ir a https://console.cloud.google.com
+2. Proyecto: filadelfia-b6238
+3. Cloud Shell (botón `>_` arriba a la derecha)
+4. Subir `cors.json` y ejecutar el comando gsutil
+
+Sin esto las descargas offline fallan con error CORS. El timeout de 12s evita el spinner infinito
+pero **no soluciona la raíz del problema**.
+
+### Media Session API (Fase D) — Fácil, 30 min
+Controles en pantalla de bloqueo del celular. Ver `audioManager.js`.
 
 ---
 

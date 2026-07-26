@@ -1,11 +1,11 @@
 <template>
   <!-- Solo mostrar si hay algo que ofrecer y el usuario no lo descartó -->
-  <v-slide-y-reverse-transition>
+  <v-slide-y-transition>
     <div v-if="visible" class="install-prompt">
 
       <!-- Fila: ícono + texto + cerrar -->
       <div class="install-prompt__top">
-        <img src="/logo-redondo.png" alt="logo" class="install-prompt__logo" />
+        <img src="/icon-maskable-512.png" alt="logo" class="install-prompt__logo" />
         <div class="install-prompt__text">
           <div class="install-prompt__title">La Voz de Filadelfia</div>
           <div class="install-prompt__sub">Radio cristiana siempre contigo</div>
@@ -43,7 +43,7 @@
       </div>
 
     </div>
-  </v-slide-y-reverse-transition>
+  </v-slide-y-transition>
 </template>
 
 <script setup>
@@ -134,7 +134,7 @@ const enableNotifications = async () => {
 <style scoped>
 .install-prompt {
   position: fixed;
-  bottom: 66px;
+  top: calc(env(safe-area-inset-top, 0px) + 12px);
   left: 12px;
   right: 12px;
   z-index: 800;

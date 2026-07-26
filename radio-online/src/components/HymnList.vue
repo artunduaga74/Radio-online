@@ -6,8 +6,20 @@
       Himnario
     </h2>
     <p class="text-caption text-center text-medium-emphasis mb-3">
-      Escucha o descarga los himnos de la congregación
+      Toca un himno para ver la letra · pulsa ▶ para escucharlo
     </p>
+
+    <!-- Banner sin conexión -->
+    <v-alert
+      v-if="isOffline"
+      type="warning"
+      variant="tonal"
+      density="compact"
+      icon="mdi-wifi-off"
+      rounded="lg"
+      class="mb-3">
+      Sin conexión — mostrando himnos guardados
+    </v-alert>
 
     <!-- Búsqueda + botón modo selección -->
     <div class="d-flex align-center gap-2 mb-2">
@@ -133,13 +145,14 @@
           <!-- Duración -->
           <span v-if="h.duracion" class="hymn-dur">{{ h.duracion }}</span>
 
-          <!-- Expandir letra (solo si tiene) -->
+          <!-- Reproducir / pausar -->
           <button
-            v-if="h.letra"
-            class="hymn-expand-btn"
-            :class="{ 'hymn-expand-btn--open': expandedId === h.id }"
-            @click.stop="toggleExpand(h.id)">
-            <v-icon size="15">mdi-text</v-icon>
+            v-if="h.url"
+            class="hymn-play-btn"
+            :class="{ 'hymn-play-btn--active': playingId === h.id }"
+            :title="playingId === h.id && !isPaused ? 'Pausar' : 'Reproducir'"
+            @click.stop="onPlayClick(h)">
+            <v-icon size="18">{{ playingId === h.id && !isPaused ? 'mdi-pause-circle' : 'mdi-play-circle' }}</v-icon>
           </button>
 
           <!-- Descargar MP3 -->
@@ -191,9 +204,32 @@
       {{ filtrados.length }} himno{{ filtrados.length !== 1 ? 's' : '' }}
     </p>
 
+    <!-- Error de descarga -->
+    <v-snackbar
+      :model-value="!!downloadError"
+      color="error"
+      location="top"
+      :timeout="5000"
+      rounded="lg">
+      <v-icon size="18" class="mr-2">mdi-wifi-off</v-icon>
+      {{ downloadError }}
+    </v-snackbar>
+
+    <!-- Himno no descargado (offline) -->
+    <v-snackbar
+      :model-value="!!offlinePlayMsg"
+      color="warning"
+      location="top"
+      :timeout="4000"
+      rounded="lg">
+      <v-icon size="18" class="mr-2">mdi-download-off</v-icon>
+      {{ offlinePlayMsg }}
+    </v-snackbar>
+
     <!-- ═══ MINI REPRODUCTOR FIJO ═══ -->
     <v-slide-y-reverse-transition>
       <div v-if="playingId" class="hymn-player">
+       <div class="hymn-player__main">
 
         <!-- Info: número visible + título -->
         <div class="hymn-player__info">
@@ -259,6 +295,21 @@
             <v-icon size="18">mdi-close</v-icon>
           </v-btn>
         </div>
+       </div>
+
+       <!-- Barra de progreso -->
+       <div class="hymn-player__progress">
+         <span class="hymn-player__time">{{ fmtTime(currentTime) }}</span>
+         <v-slider
+           :model-value="currentTime"
+           :max="duration || 1"
+           density="compact" hide-details
+           color="white" track-color="rgba(255,255,255,0.35)"
+           thumb-size="10" track-size="3"
+           class="flex-grow-1"
+           @update:model-value="seekTo" />
+         <span class="hymn-player__time">{{ fmtTime(duration) }}</span>
+       </div>
       </div>
     </v-slide-y-reverse-transition>
 
@@ -268,8 +319,15 @@
 <script setup>
 import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import { collection, onSnapshot, orderBy, query } from 'firebase/firestore'
-import { db } from '@/firebase'
+import { ref as storageRef, getBlob } from 'firebase/storage'
+import { db, storage } from '@/firebase'
 import { activeAudioSource, stopRadio, registerStopCallback, stopAllExcept } from '@/utils/audioManager'
+import { saveAudio, getBlobUrl, getAllKeys } from '@/utils/useOfflineAudio'
+
+// ── Conexión ─────────────────────────────────────────────────────
+const isOffline = ref(!navigator.onLine)
+const _onOnline  = () => { isOffline.value = false }
+const _onOffline = () => { isOffline.value = true }
 
 // ── Estado general ──────────────────────────────────────────────
 const search          = ref('')
@@ -308,47 +366,53 @@ const toggleFavorite = (id) => {
   localStorage.setItem('hymn_favorites', JSON.stringify([...favorites]))
 }
 
-// ── Descargas ────────────────────────────────────────────────────
-const downloadedIds  = reactive(new Set(JSON.parse(localStorage.getItem('hymn_downloaded') || '[]')))
-const downloadingId  = ref(null)
+// ── Descargas / caché offline (IndexedDB) ────────────────────────
+const downloadedIds = reactive(new Set())
+const downloadingId = ref(null)
+
+// Cargar claves ya guardadas en IndexedDB al montar
+const syncDownloadedIds = async () => {
+  const keys = await getAllKeys()
+  keys.filter(k => k.startsWith('hymn_')).forEach(k => downloadedIds.add(k.replace('hymn_', '')))
+}
+
+const downloadError  = ref('')
+const offlinePlayMsg = ref('')
 
 const downloadHymn = async (h) => {
   if (downloadingId.value) return
   downloadingId.value = h.id
+  downloadError.value = ''
   try {
-    // Descarga vía fetch → blob para que funcione desde Firebase Storage
-    const res  = await fetch(h.url)
-    const blob = await res.blob()
-    const num  = h.numero ? String(h.numero).padStart(3, '0') + ' - ' : ''
-    const name = `${num}${h.titulo}.mp3`
+    const timeout = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('Tiempo de espera agotado. Verifica tu conexión.')), 20000)
+    )
+    const blob = await Promise.race([
+      h.storagePath
+        ? getBlob(storageRef(storage, h.storagePath))
+        : fetch(h.url).then(r => r.blob()),
+      timeout,
+    ])
 
-    // Chrome/Edge desktop: ofrecemos elegir ubicación y crear carpeta Filadelfia/Himnario
-    if ('showSaveFilePicker' in window) {
-      try {
-        const handle = await showSaveFilePicker({
-          suggestedName: name,
-          startIn: 'music',
-          types: [{ description: 'Audio MP3', accept: { 'audio/mpeg': ['.mp3'] } }],
-        })
-        const writable = await handle.createWritable()
-        await writable.write(blob)
-        await writable.close()
-      } catch (e) {
-        if (e.name === 'AbortError') { downloadingId.value = null; return }
-        throw e
-      }
-    } else {
-      // Móvil y Firefox: descarga estándar
-      const url = URL.createObjectURL(blob)
-      const a   = Object.assign(document.createElement('a'), { href: url, download: name })
-      document.body.appendChild(a); a.click()
-      document.body.removeChild(a)
-      setTimeout(() => URL.revokeObjectURL(url), 2000)
-    }
+    // 1. Guardar en caché del navegador (para reproducir offline dentro de la app)
+    await saveAudio(`hymn_${h.id}`, blob, { titulo: h.titulo, numero: h.numero || 0, type: 'hymn' })
     downloadedIds.add(h.id)
-    localStorage.setItem('hymn_downloaded', JSON.stringify([...downloadedIds]))
-  } catch { /* fallo silencioso — la descarga puede cancelarse */ }
-  finally { downloadingId.value = null }
+
+    // 2. Descargar archivo real al dispositivo (carpeta Descargas del celular/PC)
+    const fileUrl = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = fileUrl
+    a.download = `${h.numero ? h.numero + ' - ' : ''}${h.titulo}.mp3`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(fileUrl)
+  } catch (e) {
+    downloadError.value = e.message.includes('agotado')
+      ? e.message
+      : 'No se pudo descargar. Verifica tu conexión.'
+    setTimeout(() => { downloadError.value = '' }, 5000)
+  } finally { downloadingId.value = null }
 }
 
 // ── Modo selección / cola ────────────────────────────────────────
@@ -368,7 +432,13 @@ const onRowClick = (h) => {
     else selectedIds.add(h.id)
     return
   }
-  // Modo normal: tap = reproducir / pausar
+  // Modo normal: tap en el título = mostrar/ocultar la letra
+  if (h.letra) { toggleExpand(h.id); return }
+  // Sin letra: reproducir como antes
+  onPlayClick(h)
+}
+
+const onPlayClick = (h) => {
   if (playingId.value === h.id) { togglePause(); return }
   playDirect(h)
 }
@@ -406,12 +476,45 @@ const filtrados = computed(() => {
   return lista
 })
 
+// ── Progreso de reproducción ─────────────────────────────────────
+const currentTime = ref(0)
+const duration    = ref(0)
+
+const fmtTime = (s) => {
+  if (!isFinite(s) || s <= 0) return '0:00'
+  const m  = Math.floor(s / 60)
+  const ss = Math.floor(s % 60).toString().padStart(2, '0')
+  return `${m}:${ss}`
+}
+
+const seekTo = (v) => {
+  if (hymnAudio) hymnAudio.currentTime = v
+}
+
+// ── Media Session: controles en pantalla de bloqueo del celular ──
+const setMediaSession = (h) => {
+  if (!('mediaSession' in navigator)) return
+  navigator.mediaSession.metadata = new MediaMetadata({
+    title:  `${h.numero ? h.numero + ' · ' : ''}${h.titulo}`,
+    artist: h.autor || 'Himnario',
+    album:  'La Voz de Filadelfia',
+  })
+  navigator.mediaSession.setActionHandler('play',  () => { if (isPaused.value)  togglePause() })
+  navigator.mediaSession.setActionHandler('pause', () => { if (!isPaused.value) togglePause() })
+  navigator.mediaSession.setActionHandler('previoustrack', prevHymn)
+  navigator.mediaSession.setActionHandler('nexttrack', nextHymn)
+}
+
 // ── Audio ────────────────────────────────────────────────────────
-let hymnAudio  = null
-let unsubscribe = null
+let hymnAudio    = null
+let unsubscribe  = null
+let blobRevoke   = null   // función para liberar URL de blob al terminar
 
 onMounted(() => {
+  window.addEventListener('online',  _onOnline)
+  window.addEventListener('offline', _onOffline)
   registerStopCallback('himnario', stopHymn)
+  syncDownloadedIds()
   const q = query(collection(db, 'hymns'), orderBy('numero', 'asc'))
   unsubscribe = onSnapshot(q, (snap) => {
     hymns.value   = snap.docs.map(d => ({ id: d.id, ...d.data() }))
@@ -419,21 +522,45 @@ onMounted(() => {
   })
 })
 
-onUnmounted(() => { unsubscribe?.(); stopHymn() })
+onUnmounted(() => {
+  window.removeEventListener('online',  _onOnline)
+  window.removeEventListener('offline', _onOffline)
+  unsubscribe?.()
+  stopHymn()
+})
 
 // Detener si otra fuente toma el control (radio, devocional)
 watch(activeAudioSource, (src) => { if (src && src !== 'himnario') stopHymn() })
 
-const playDirect = (h) => {
-  stopAllExcept('himnario')           // detiene radio, devocional, spotify
+const playDirect = async (h) => {
+  // Verificar caché antes de hacer cualquier cosa
+  const cached = await getBlobUrl(`hymn_${h.id}`)
+
+  // Sin conexión y sin caché → notificar y NO abrir el reproductor
+  if (isOffline.value && !cached) {
+    offlinePlayMsg.value = `"${h.titulo}" no está descargado. Toca ↓ para descargarlo.`
+    setTimeout(() => { offlinePlayMsg.value = '' }, 4000)
+    return
+  }
+
+  stopAllExcept('himnario')
   activeAudioSource.value = 'himnario'
   if (hymnAudio) { hymnAudio.pause(); hymnAudio = null }
-  playbackSpeed.value = 1          // cada himno nuevo siempre arranca en 1x
-  expandedId.value = null           // cierra letra al cambiar himno
-  hymnAudio = new Audio(h.url)
+  if (blobRevoke) { blobRevoke(); blobRevoke = null }
+  playbackSpeed.value = 1
+
+  const src = cached ? cached.url : h.url
+  if (cached) blobRevoke = cached.revoke
+
+  hymnAudio = new Audio(src)
   hymnAudio.playbackRate = 1
   hymnAudio.play()
   hymnAudio.onended = () => nextHymn()
+  currentTime.value = 0
+  duration.value    = 0
+  hymnAudio.ontimeupdate     = () => { currentTime.value = hymnAudio?.currentTime || 0 }
+  hymnAudio.onloadedmetadata = () => { duration.value    = hymnAudio?.duration    || 0 }
+  setMediaSession(h)
   playingId.value = h.id
   isPaused.value  = false
 }
@@ -442,14 +569,21 @@ const togglePause = () => {
   if (!hymnAudio) return
   if (isPaused.value) { hymnAudio.play(); isPaused.value = false }
   else                { hymnAudio.pause(); isPaused.value = true  }
+  if ('mediaSession' in navigator) {
+    navigator.mediaSession.playbackState = isPaused.value ? 'paused' : 'playing'
+  }
 }
 
 const stopHymn = () => {
   if (hymnAudio) { hymnAudio.pause(); hymnAudio = null }
-  playingId.value  = null
-  isPaused.value   = false
-  queue.value      = []
-  queueIndex.value = -1
+  if (blobRevoke) { blobRevoke(); blobRevoke = null }
+  playingId.value   = null
+  isPaused.value    = false
+  currentTime.value = 0
+  duration.value    = 0
+  queue.value       = []
+  queueIndex.value  = -1
+  if ('mediaSession' in navigator) navigator.mediaSession.metadata = null
   if (activeAudioSource.value === 'himnario') activeAudioSource.value = null
 }
 
@@ -574,20 +708,20 @@ const compartirWhatsApp = (h) => {
   margin: 0 2px;
 }
 
-/* Botón expandir letra */
-.hymn-expand-btn {
+/* Botón reproducir / pausar */
+.hymn-play-btn {
   background: none;
   border: none;
   padding: 4px 5px;
   cursor: pointer;
-  color: rgba(var(--v-theme-on-surface), 0.3);
+  color: rgba(var(--v-theme-on-surface), 0.45);
   flex-shrink: 0;
-  transition: transform 0.2s, color 0.15s;
+  transition: transform 0.15s, color 0.15s;
   line-height: 1;
 }
-.hymn-expand-btn:hover     { color: rgb(var(--v-theme-primary)); }
-.hymn-expand-btn--open     { color: rgb(var(--v-theme-primary)); }
-.hymn-row--expanded        { background: rgba(var(--v-theme-primary), 0.05); }
+.hymn-play-btn:hover    { color: rgb(var(--v-theme-primary)); transform: scale(1.15); }
+.hymn-play-btn--active  { color: rgb(var(--v-theme-primary)) !important; }
+.hymn-row--expanded     { background: rgba(var(--v-theme-primary), 0.05); }
 
 /* Panel de letra */
 .hymn-letra-panel {
@@ -724,11 +858,31 @@ const compartirWhatsApp = (h) => {
   z-index: 900;
   background: rgb(var(--v-theme-primary));
   border-radius: 14px;
-  padding: 10px 12px;
+  padding: 8px 12px 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+}
+.hymn-player__main {
   display: flex;
   align-items: center;
   gap: 8px;
-  box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+  width: 100%;
+}
+.hymn-player__progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  margin-top: 2px;
+}
+.hymn-player__time {
+  font-size: 10px;
+  color: rgba(255,255,255,0.8);
+  min-width: 28px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
 }
 .hymn-player__info {
   flex: 1;

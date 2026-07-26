@@ -101,3 +101,10 @@ export function setSpotifyAsActive() {
   activeAudioSource.value = 'spotify';
   stopRadio();
 }
+
+/** Detiene absolutamente todo el audio (radio + himnario + devocional) */
+export function stopAll() {
+  Object.keys(_stopCallbacks).forEach(s => _stopCallbacks[s]?.());
+  stopRadio();
+  activeAudioSource.value = null;
+}

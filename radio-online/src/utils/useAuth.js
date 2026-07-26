@@ -9,7 +9,12 @@ import {
 } from 'firebase/auth'
 import { auth } from '@/firebase'
 
-const ADMIN_EMAIL = 'artunduaga123@yahoo.com'
+// Correos autorizados como administradores (deben coincidir con
+// firestore.rules y storage.rules)
+const ADMIN_EMAILS = [
+    'artunduaga123@yahoo.com',
+    'artunduaga74@gmail.com',
+]
 
 const user      = ref(null)
 const authReady = ref(false)
@@ -20,14 +25,13 @@ onAuthStateChanged(auth, (u) => {
 })
 
 export function useAuth() {
-    const isAdmin = computed(() => user.value?.email === ADMIN_EMAIL)
+    const isAdmin = computed(() => ADMIN_EMAILS.includes(user.value?.email))
 
     const loginWithEmail = (email, password) =>
         signInWithEmailAndPassword(auth, email, password)
 
     const loginWithGoogle = async () => {
         const provider = new GoogleAuthProvider()
-        provider.setCustomParameters({ login_hint: ADMIN_EMAIL })
         await signInWithPopup(auth, provider)
     }
 

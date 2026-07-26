@@ -3,15 +3,16 @@
         v-model="drawer"
         :fullscreen="$vuetify.display.smAndDown"
         :max-width="400"
+        :max-height="$vuetify.display.smAndDown ? undefined : '92vh'"
         scrollable>
 
-        <v-card>
+        <v-card class="d-flex flex-column" style="height:100%">
             <!-- Cabecera -->
-            <div class="d-flex align-center px-4 py-3">
+            <div class="d-flex align-center px-4 py-3" style="flex-shrink:0">
                 <v-icon color="primary" class="mr-3">mdi-shield-account</v-icon>
                 <div class="flex-grow-1">
                     <div class="text-body-1 font-weight-bold">Panel de Administración</div>
-                    <div class="text-caption text-medium-emphasis">La Voz de Filadelfia</div>
+                    <div class="text-caption text-medium-emphasis">La Voz de Filadelfia · {{ APP_VERSION }}</div>
                 </div>
                 <v-btn icon variant="text" size="small" @click="closeDrawer">
                     <v-icon>mdi-close</v-icon>
@@ -19,39 +20,32 @@
             </div>
 
             <!-- Usuario -->
-            <div class="px-4 pb-2">
+            <div class="px-4 pb-2" style="flex-shrink:0">
                 <v-chip color="success" variant="tonal" prepend-icon="mdi-account-check" size="small">
                     {{ user?.email }}
                 </v-chip>
             </div>
 
-            <!-- Pestañas: sticky para que no desaparezcan al hacer scroll -->
-            <v-tabs v-model="activeTab" color="primary" density="compact" grow
-                style="position:sticky; top:0; z-index:10; background:rgb(var(--v-theme-surface))">
-                <v-tab value="notif">
-                    <v-icon size="16" class="mr-1">mdi-bell</v-icon>
-                    Avisos
-                </v-tab>
-                <v-tab value="episodios">
-                    <v-icon size="16" class="mr-1">mdi-spotify</v-icon>
-                    Episodios
-                </v-tab>
-                <v-tab value="devocional">
-                    <v-icon size="16" class="mr-1">mdi-book-open-variant</v-icon>
-                    Devocional
-                </v-tab>
-                <v-tab value="himnario">
-                    <v-icon size="16" class="mr-1">mdi-book-music</v-icon>
-                    Himnario
-                </v-tab>
-            </v-tabs>
-            <v-divider />
+            <!-- Pestañas hechas a mano (sin v-tabs: el widget de Vuetify
+                 explotaba de altura en móvil dejando un hueco gigante) -->
+            <div class="admin-tabs">
+                <button
+                    v-for="t in TABS" :key="t.value"
+                    class="admin-tab"
+                    :class="{ 'admin-tab--active': activeTab === t.value }"
+                    type="button"
+                    @click="activeTab = t.value">
+                    <v-icon size="16">{{ t.icon }}</v-icon>
+                    <span>{{ t.label }}</span>
+                </button>
+            </div>
 
-            <v-card-text ref="cardTextRef" class="pa-4" style="overflow-y:auto">
-                <v-window v-model="activeTab">
+            <v-card-text ref="cardTextRef" class="pa-4" style="flex:1; overflow-y:auto; min-height:0">
+                <!-- Contenido de pestañas con v-show simple (sin v-window:
+                     su cálculo de alturas dejaba un espacio fantasma en móvil) -->
 
                     <!-- ── PESTAÑA NOTIFICACIONES ── -->
-                    <v-window-item value="notif">
+                    <div v-show="activeTab === 'notif'">
                         <h3 class="text-body-1 font-weight-bold mb-3">
                             <v-icon size="18" class="mr-1">mdi-bell-ring</v-icon>
                             Notificación push
@@ -80,10 +74,10 @@
                             @click="sendPushNotification">
                             Enviar a todos
                         </v-btn>
-                    </v-window-item>
+                    </div>
 
                     <!-- ── PESTAÑA EPISODIOS ── -->
-                    <v-window-item value="episodios">
+                    <div v-show="activeTab === 'episodios'">
                         <h3 class="text-body-1 font-weight-bold mb-3">
                             <v-icon size="18" class="mr-1">{{ editingId ? 'mdi-pencil' : 'mdi-plus-circle' }}</v-icon>
                             {{ editingId ? 'Editar episodio' : 'Agregar episodio' }}
@@ -162,10 +156,10 @@
                                 </v-list-item-title>
                             </v-list-item>
                         </v-list>
-                    </v-window-item>
+                    </div>
 
                     <!-- ── PESTAÑA HIMNARIO ── -->
-                    <v-window-item value="himnario">
+                    <div v-show="activeTab === 'himnario'">
                         <h3 class="text-body-1 font-weight-bold mb-3">
                             <v-icon size="18" class="mr-1">{{ hymnEditingId ? 'mdi-pencil' : 'mdi-upload' }}</v-icon>
                             {{ hymnEditingId ? 'Editar himno' : 'Subir himno' }}
@@ -292,10 +286,10 @@
                                 </v-list-item-title>
                             </v-list-item>
                         </v-list>
-                    </v-window-item>
+                    </div>
 
                     <!-- ── PESTAÑA DEVOCIONAL ── -->
-                    <v-window-item value="devocional">
+                    <div v-show="activeTab === 'devocional'">
 
                         <h3 class="text-body-1 font-weight-bold mb-3">
                             <v-icon size="18" class="mr-1">{{ devoEditingId ? 'mdi-pencil' : 'mdi-book-open-variant' }}</v-icon>
@@ -599,9 +593,7 @@
                             </v-list-item>
                         </v-list>
 
-                    </v-window-item>
-
-                </v-window>
+                    </div>
 
                 <v-divider class="my-4" />
 
@@ -683,13 +675,25 @@ import { ref as storageRef, uploadBytesResumable, getDownloadURL, deleteObject }
 import { getFunctions, httpsCallable } from 'firebase/functions'
 import { db, storage, app } from '@/firebase'
 import { useAuth } from '@/utils/useAuth'
+import { stopAll } from '@/utils/audioManager'
 
 const { user, isAdmin, logout } = useAuth()
 
+// Versión visible en el encabezado — subir el número en cada deploy
+// para poder confirmar qué versión está corriendo cada celular
+const APP_VERSION = 'v3.2'
+
 const drawer      = ref(false)
 const activeTab   = ref('episodios')
+
+const TABS = [
+    { value: 'notif',      icon: 'mdi-bell',              label: 'Avisos' },
+    { value: 'episodios',  icon: 'mdi-spotify',           label: 'Episodios' },
+    { value: 'devocional', icon: 'mdi-book-open-variant', label: 'Devocional' },
+    { value: 'himnario',   icon: 'mdi-book-music',        label: 'Himnario' },
+]
 const cardTextRef = ref(null)
-const openDrawer  = () => { drawer.value = true }
+const openDrawer  = () => { stopAll(); drawer.value = true }
 const closeDrawer = () => { drawer.value = false }
 
 // Scroll al tope del contenido al cambiar de pestaña
@@ -701,6 +705,22 @@ watch(activeTab, () => {
 })
 
 defineExpose({ openDrawer })
+
+// ── Scroll inteligente al editar ──
+// Al tocar "editar" en un ítem de la lista, el formulario está arriba;
+// guardamos la posición en la lista, subimos al formulario y al
+// guardar/cancelar regresamos a donde estaba el usuario.
+const savedListScroll = ref(0)
+const getScrollEl = () => cardTextRef.value?.$el ?? cardTextRef.value
+
+const scrollToForm = () => {
+    savedListScroll.value = getScrollEl()?.scrollTop ?? 0
+    nextTick(() => getScrollEl()?.scrollTo({ top: 0, behavior: 'smooth' }))
+}
+
+const scrollBackToList = () => {
+    nextTick(() => getScrollEl()?.scrollTo({ top: savedListScroll.value, behavior: 'smooth' }))
+}
 
 // ── Snackbar ──
 const snackbar      = ref(false)
@@ -737,11 +757,13 @@ const startEdit = (ep) => {
     form.spotifyUrl   = fromEmbedUrl(ep.embedUrl)
     form.title        = ep.title
     form.description  = ep.description || ''
+    scrollToForm()
 }
 
 const cancelEdit = () => {
     editingId.value = null
     formRef.value?.reset()
+    scrollBackToList()
 }
 
 let unsubscribeEpisodes = null
@@ -766,6 +788,7 @@ const saveEpisode = async () => {
             })
             notify('Episodio actualizado ✓')
             editingId.value = null
+            scrollBackToList()
         } else {
             await addDoc(collection(db, 'episodes'), {
                 title: form.title.trim(), description: form.description.trim(), embedUrl,
@@ -917,10 +940,19 @@ const hymnEditingId   = ref(null)
 const loadingHymns    = ref(true)
 const hymns           = ref([])
 
-// Categorías dinámicas — se derivan de los himnos ya subidos
+// Categorías predefinidas + las ya usadas en los himnos subidos
+const CATEGORIAS_PREDEFINIDAS = [
+    'Adoración', 'Padre', 'Jesús', 'Espíritu Santo', 'Biblia',
+    'Conversión', 'Fe y esperanza', 'Consagración', 'Oración',
+    'Vida cristiana', 'Iglesia', 'Bautismo', 'Doctrinas',
+    'Hogar', 'Especiales', 'Doxología',
+]
 const categoriasExistentes = computed(() => {
-    const set = new Set(hymns.value.map(h => h.categoria).filter(Boolean))
-    return [...set].sort()
+    const set = new Set([
+        ...CATEGORIAS_PREDEFINIDAS,
+        ...hymns.value.map(h => h.categoria).filter(Boolean),
+    ])
+    return [...set]
 })
 
 let unsubscribeHymns = null
@@ -941,6 +973,7 @@ const startEditHymn = (h) => {
     hymn.letra     = h.letra || ''
     hymnArchivo.value = null
     setEditorContent(letraRef, h.letra || '')
+    scrollToForm()
 }
 
 const cancelEditHymn = () => {
@@ -948,6 +981,7 @@ const cancelEditHymn = () => {
     hymnArchivo.value = null
     Object.assign(hymn, { numero: '', titulo: '', autor: '', categoria: '', letra: '' })
     setEditorContent(letraRef, '')
+    scrollBackToList()
 }
 
 const uploadHymn = async () => {
@@ -1288,6 +1322,7 @@ const startEditDevo = (d) => {
     devoAudioBlob.value  = null
     waveformBars.value   = new Array(BARS).fill(2)
     setEditorContent(reflexionRef, d.reflexion || '')
+    scrollToForm()
 }
 
 const cancelEditDevo = () => {
@@ -1296,6 +1331,7 @@ const cancelEditDevo = () => {
     Object.assign(devo, { titulo: '', versiculo: '', reflexion: '', archivo: null })
     setEditorContent(reflexionRef, '')
     clearAudio()
+    scrollBackToList()
 }
 
 let unsubscribeDevo = null
@@ -1426,6 +1462,39 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+/* Barra de pestañas propia — altura fija, imposible que se infle */
+.admin-tabs {
+  display: flex;
+  flex-shrink: 0;
+  height: 44px;
+  overflow-x: auto;
+  border-bottom: 1px solid rgba(var(--v-border-color), 0.12);
+}
+.admin-tab {
+  flex: 1 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 0 10px;
+  height: 100%;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: rgba(var(--v-theme-on-surface), 0.6);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 0.15s, border-color 0.15s;
+}
+.admin-tab--active {
+  color: rgb(var(--v-theme-primary));
+  border-bottom-color: rgb(var(--v-theme-primary));
+}
+
 @keyframes blink {
   0%, 100% { opacity: 1; }
   50%       { opacity: 0; }

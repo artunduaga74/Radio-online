@@ -1,0 +1,28 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // Correos autorizados como administradores
+    function isAdmin() {
+      return request.auth != null
+             && request.auth.token.email in [
+               'artunduaga123@yahoo.com',
+               'artunduaga74@gmail.com'
+             ];
+    }
+
+    match /hymns/{fileName} {
+      allow read:  if true;
+      allow write: if isAdmin();
+    }
+    match /devotionals/{fileName} {
+      allow read:  if true;
+      allow write: if isAdmin();
+    }
+    // Resto de rutas: lectura para usuarios autenticados, escritura solo admin
+    match /{allPaths=**} {
+      allow read:  if request.auth != null;
+      allow write: if isAdmin();
+    }
+  }
+}

@@ -1,0 +1,35 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Correos autorizados como administradores
+    function isAdmin() {
+      return request.auth != null
+             && request.auth.token.email in [
+               'artunduaga123@yahoo.com',
+               'artunduaga74@gmail.com'
+             ];
+    }
+
+    match /episodes/{episode} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    match /config/{doc} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    match /hymns/{hymn} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    match /devotionals/{doc} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    match /fcm_tokens/{token} {
+      allow write: if true;
+      allow read:  if false;
+    }
+  }
+}
