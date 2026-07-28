@@ -56,27 +56,57 @@
     <!-- Filtro categorías -->
     <div class="d-flex flex-wrap ga-1 mb-3">
       <v-chip
-        :variant="categoriaActiva === '' ? 'flat' : 'tonal'"
+        :variant="categoriaActiva === '' && !tagActiva ? 'flat' : 'tonal'"
         color="primary" size="x-small" clickable
-        @click="categoriaActiva = ''">
+        @click="selectCategoriaFiltro('')">
         Todos
       </v-chip>
       <v-chip
-        :variant="categoriaActiva === '__fav__' ? 'flat' : 'tonal'"
+        :variant="categoriaActiva === '__fav__' && !tagActiva ? 'flat' : 'tonal'"
         color="pink" size="x-small" clickable
         prepend-icon="mdi-heart"
-        @click="categoriaActiva = '__fav__'">
+        @click="selectCategoriaFiltro('__fav__')">
         Favoritos
         <span v-if="favorites.size > 0" class="ml-1">({{ favorites.size }})</span>
       </v-chip>
       <v-chip
         v-for="cat in categorias" :key="cat"
-        :variant="categoriaActiva === cat ? 'flat' : 'tonal'"
+        :variant="categoriaActiva === cat && !tagActiva ? 'flat' : 'tonal'"
         color="primary" size="x-small" clickable
-        @click="categoriaActiva = cat">
+        @click="selectCategoriaFiltro(cat)">
         {{ cat }}
       </v-chip>
+      <v-chip
+        v-for="tag in customTags" :key="tag.id"
+        :variant="tagActiva === tag.id ? 'flat' : 'tonal'"
+        color="deep-purple" size="x-small" clickable
+        prepend-icon="mdi-tag-heart"
+        @click="selectTagFiltro(tag.id)">
+        {{ tag.nombre }}
+        <span class="ml-1">({{ tag.hymnIds.length }})</span>
+      </v-chip>
+      <v-chip
+        variant="outlined" color="primary" size="x-small" clickable
+        prepend-icon="mdi-plus"
+        @click="openTagDialog()">
+        Nuevo
+      </v-chip>
     </div>
+
+    <!-- Barra de acciones de la etiqueta activa -->
+    <v-slide-y-transition>
+      <div v-if="tagActivaObj" class="tag-action-bar mb-3">
+        <v-icon size="15" color="deep-purple">mdi-tag-heart</v-icon>
+        <span class="text-caption ml-1">Etiqueta: <strong>{{ tagActivaObj.nombre }}</strong></span>
+        <v-spacer />
+        <v-btn size="x-small" variant="text" color="primary" @click="openTagDialog(tagActivaObj)">
+          Editar
+        </v-btn>
+        <v-btn size="x-small" variant="text" color="error" @click="confirmDeleteTag(tagActivaObj)">
+          Eliminar
+        </v-btn>
+      </div>
+    </v-slide-y-transition>
 
     <!-- Barra de selección activa -->
     <v-slide-y-transition>
@@ -203,6 +233,94 @@
     <p v-if="!loading && filtrados.length > 0" class="text-caption text-center text-medium-emphasis mt-2 mb-2">
       {{ filtrados.length }} himno{{ filtrados.length !== 1 ? 's' : '' }}
     </p>
+
+    <!-- ═══ Diálogo: crear / editar etiqueta personalizada (localStorage) ═══ -->
+    <v-dialog v-model="tagDialogOpen" max-width="480" scrollable>
+      <v-card rounded="lg">
+        <v-card-title class="d-flex align-center py-3">
+          <v-icon class="mr-2" color="deep-purple">mdi-tag-heart</v-icon>
+          <span class="text-body-1">{{ tagDialogEditingId ? 'Editar etiqueta' : 'Nueva etiqueta' }}</span>
+          <v-spacer />
+          <v-btn icon variant="text" size="small" @click="tagDialogOpen = false">
+            <v-icon>mdi-close</v-icon>
+          </v-btn>
+        </v-card-title>
+
+        <v-card-text style="max-height:65vh">
+          <p class="text-caption text-medium-emphasis mb-3">
+            Se guarda solo en este dispositivo — ideal para preparar los himnos de un servicio.
+          </p>
+
+          <v-text-field
+            v-model="tagDialogNombre"
+            label="Nombre de la etiqueta"
+            placeholder="Ej: Servicio Domingo"
+            variant="outlined" density="compact"
+            prepend-inner-icon="mdi-tag"
+            class="mb-3" />
+
+          <v-text-field
+            v-model="tagDialogSearch"
+            label="Buscar himno por título o número..."
+            variant="outlined" density="compact"
+            prepend-inner-icon="mdi-magnify"
+            clearable hide-details
+            class="mb-2" />
+
+          <div class="text-caption text-medium-emphasis mb-2 mt-2">
+            {{ tagDialogSelected.size }} seleccionado{{ tagDialogSelected.size !== 1 ? 's' : '' }}
+            · mostrando {{ tagDialogFiltered.length ? tagDialogPageStart + 1 : 0 }}-{{ tagDialogPageEnd }} de {{ tagDialogFiltered.length }}
+          </div>
+
+          <v-list density="compact" class="pa-0 mb-2 tag-dialog-list">
+            <v-list-item
+              v-for="h in tagDialogPageItems" :key="h.id"
+              rounded="lg" class="mb-1 px-2"
+              :active="tagDialogSelected.has(h.id)"
+              color="primary"
+              @click="toggleTagDialogSelected(h.id)">
+              <template #prepend>
+                <v-icon size="18" :color="tagDialogSelected.has(h.id) ? 'primary' : ''" class="mr-2">
+                  {{ tagDialogSelected.has(h.id) ? 'mdi-checkbox-marked' : 'mdi-checkbox-blank-outline' }}
+                </v-icon>
+              </template>
+              <v-list-item-title class="text-body-2">
+                {{ h.numero ? '#'+h.numero+' — ' : '' }}{{ h.titulo }}
+              </v-list-item-title>
+            </v-list-item>
+            <v-list-item v-if="tagDialogFiltered.length === 0">
+              <v-list-item-title class="text-caption text-medium-emphasis">
+                No hay himnos que coincidan.
+              </v-list-item-title>
+            </v-list-item>
+          </v-list>
+
+          <div v-if="tagDialogFiltered.length > TAG_DIALOG_PAGE_SIZE" class="d-flex align-center justify-center ga-2">
+            <v-btn size="small" variant="tonal" icon :disabled="tagDialogPage === 0" @click="tagDialogPage--">
+              <v-icon size="18">mdi-chevron-left</v-icon>
+            </v-btn>
+            <span class="text-caption">Página {{ tagDialogPage + 1 }} / {{ tagDialogTotalPages }}</span>
+            <v-btn size="small" variant="tonal" icon :disabled="tagDialogPage >= tagDialogTotalPages - 1" @click="tagDialogPage++">
+              <v-icon size="18">mdi-chevron-right</v-icon>
+            </v-btn>
+          </div>
+        </v-card-text>
+
+        <v-card-actions class="px-4 pb-3">
+          <v-btn v-if="tagDialogEditingId" variant="text" color="error" @click="deleteTagFromDialog">
+            Eliminar
+          </v-btn>
+          <v-spacer />
+          <v-btn variant="tonal" rounded="lg" @click="tagDialogOpen = false">Cancelar</v-btn>
+          <v-btn
+            color="primary" variant="flat" rounded="lg"
+            :disabled="!tagDialogNombre?.trim() || tagDialogSelected.size === 0"
+            @click="saveTagDialog">
+            Guardar
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
 
     <!-- Error de descarga -->
     <v-snackbar
@@ -366,6 +484,105 @@ const toggleFavorite = (id) => {
   localStorage.setItem('hymn_favorites', JSON.stringify([...favorites]))
 }
 
+// ── Etiquetas personalizadas (localStorage — solo en este dispositivo) ──
+// Pensadas para preparar los himnos de un servicio: se crean, editan y
+// borran localmente, sin tocar Firestore ni requerir sesión de admin.
+const CUSTOM_TAGS_KEY = 'hymn_custom_tags'
+const customTags = reactive(JSON.parse(localStorage.getItem(CUSTOM_TAGS_KEY) || '[]'))
+const saveCustomTags = () => localStorage.setItem(CUSTOM_TAGS_KEY, JSON.stringify(customTags))
+
+const tagActiva    = ref(null)
+const tagActivaObj = computed(() => customTags.find(t => t.id === tagActiva.value) || null)
+
+const selectCategoriaFiltro = (cat) => {
+  categoriaActiva.value = cat
+  tagActiva.value = null
+}
+const selectTagFiltro = (id) => {
+  tagActiva.value = tagActiva.value === id ? null : id
+  categoriaActiva.value = ''
+}
+
+// Diálogo crear/editar etiqueta
+const TAG_DIALOG_PAGE_SIZE = 100
+const tagDialogOpen      = ref(false)
+const tagDialogEditingId = ref(null)
+const tagDialogNombre    = ref('')
+const tagDialogSearch    = ref('')
+const tagDialogSelected  = reactive(new Set())
+const tagDialogPage      = ref(0)
+
+const tagDialogFiltered = computed(() => {
+  let lista = hymns.value
+  if (tagDialogSearch.value?.trim()) {
+    const q = tagDialogSearch.value.trim().toLowerCase()
+    lista = lista.filter(h => h.titulo.toLowerCase().includes(q) || String(h.numero).includes(q))
+  }
+  return lista
+})
+const tagDialogTotalPages = computed(() => Math.max(1, Math.ceil(tagDialogFiltered.value.length / TAG_DIALOG_PAGE_SIZE)))
+const tagDialogPageStart  = computed(() => tagDialogPage.value * TAG_DIALOG_PAGE_SIZE)
+const tagDialogPageEnd    = computed(() => Math.min(tagDialogPageStart.value + TAG_DIALOG_PAGE_SIZE, tagDialogFiltered.value.length))
+const tagDialogPageItems  = computed(() => tagDialogFiltered.value.slice(tagDialogPageStart.value, tagDialogPageEnd.value))
+
+watch(tagDialogSearch, () => { tagDialogPage.value = 0 })
+
+const toggleTagDialogSelected = (id) => {
+  if (tagDialogSelected.has(id)) tagDialogSelected.delete(id)
+  else tagDialogSelected.add(id)
+}
+
+const openTagDialog = (existing = null) => {
+  if (existing) {
+    tagDialogEditingId.value = existing.id
+    tagDialogNombre.value    = existing.nombre
+    tagDialogSelected.clear()
+    existing.hymnIds.forEach(id => tagDialogSelected.add(id))
+  } else {
+    tagDialogEditingId.value = null
+    tagDialogNombre.value    = ''
+    tagDialogSelected.clear()
+  }
+  tagDialogSearch.value = ''
+  tagDialogPage.value   = 0
+  tagDialogOpen.value   = true
+}
+
+const saveTagDialog = () => {
+  const nombre = tagDialogNombre.value?.trim()
+  if (!nombre || tagDialogSelected.size === 0) return
+  const hymnIds = [...tagDialogSelected]
+  if (tagDialogEditingId.value) {
+    const tag = customTags.find(t => t.id === tagDialogEditingId.value)
+    if (tag) { tag.nombre = nombre; tag.hymnIds = hymnIds }
+  } else {
+    const id = `tag_${Date.now()}`
+    customTags.push({ id, nombre, hymnIds })
+    tagActiva.value = id
+    categoriaActiva.value = ''
+  }
+  saveCustomTags()
+  tagDialogOpen.value = false
+}
+
+const deleteTagFromDialog = () => {
+  const id = tagDialogEditingId.value
+  if (!id) return
+  const idx = customTags.findIndex(t => t.id === id)
+  if (idx !== -1) customTags.splice(idx, 1)
+  if (tagActiva.value === id) tagActiva.value = null
+  saveCustomTags()
+  tagDialogOpen.value = false
+}
+
+const confirmDeleteTag = (tag) => {
+  if (!tag) return
+  const idx = customTags.findIndex(t => t.id === tag.id)
+  if (idx !== -1) customTags.splice(idx, 1)
+  if (tagActiva.value === tag.id) tagActiva.value = null
+  saveCustomTags()
+}
+
 // ── Descargas / caché offline (IndexedDB) ────────────────────────
 const downloadedIds = reactive(new Set())
 const downloadingId = ref(null)
@@ -461,7 +678,10 @@ const categorias = computed(() => {
 
 const filtrados = computed(() => {
   let lista = hymns.value
-  if (categoriaActiva.value === '__fav__') {
+  if (tagActiva.value) {
+    const tag = customTags.find(t => t.id === tagActiva.value)
+    lista = lista.filter(h => tag?.hymnIds.includes(h.id))
+  } else if (categoriaActiva.value === '__fav__') {
     lista = lista.filter(h => favorites.has(h.id))
   } else if (categoriaActiva.value) {
     lista = lista.filter(h => h.categoria === categoriaActiva.value)
@@ -847,6 +1067,25 @@ const compartirWhatsApp = (h) => {
   border-radius: 8px;
   padding: 6px 10px;
   font-size: 12px;
+}
+
+/* Barra de acciones de la etiqueta activa */
+.tag-action-bar {
+  display: flex;
+  align-items: center;
+  background: rgba(103, 58, 183, 0.08);
+  border: 1px dashed rgba(103, 58, 183, 0.4);
+  border-radius: 8px;
+  padding: 4px 10px;
+  font-size: 12px;
+}
+
+/* Lista de himnos en el diálogo de etiquetas */
+.tag-dialog-list {
+  max-height: 320px;
+  overflow-y: auto;
+  border: 1px solid rgba(var(--v-border-color), 0.15);
+  border-radius: 10px;
 }
 
 /* ── Mini reproductor ── */

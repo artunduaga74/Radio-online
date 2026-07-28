@@ -160,132 +160,170 @@
 
                     <!-- ── PESTAÑA HIMNARIO ── -->
                     <div v-show="activeTab === 'himnario'">
-                        <h3 class="text-body-1 font-weight-bold mb-3">
-                            <v-icon size="18" class="mr-1">{{ hymnEditingId ? 'mdi-pencil' : 'mdi-upload' }}</v-icon>
-                            {{ hymnEditingId ? 'Editar himno' : 'Subir himno' }}
-                        </h3>
+                        <v-expansion-panels v-model="himnarioPanel" variant="accordion" class="mb-2">
 
-                        <v-text-field
-                            v-model="hymn.numero"
-                            label="Número"
-                            type="number"
-                            variant="outlined" density="compact"
-                            prepend-inner-icon="mdi-numeric"
-                            class="mb-2" />
+                            <!-- ═══ Panel 1: Subir himno ═══ -->
+                            <v-expansion-panel>
+                                <v-expansion-panel-title>
+                                    <v-icon size="18" class="mr-2">{{ hymnEditingId ? 'mdi-pencil' : 'mdi-upload' }}</v-icon>
+                                    {{ hymnEditingId ? 'Editar himno' : 'Subir himno' }}
+                                </v-expansion-panel-title>
+                                <v-expansion-panel-text>
 
-                        <v-text-field
-                            v-model="hymn.titulo"
-                            label="Título del himno"
-                            variant="outlined" density="compact"
-                            prepend-inner-icon="mdi-format-title"
-                            class="mb-2" />
+                                    <v-text-field
+                                        v-model="hymn.numero"
+                                        label="Número"
+                                        type="number"
+                                        variant="outlined" density="compact"
+                                        prepend-inner-icon="mdi-numeric"
+                                        class="mb-2" />
 
-                        <!-- Categoría libre — escribe o elige una existente -->
-                        <v-combobox
-                            v-model="hymn.categoria"
-                            label="Categoría (escribe o elige)"
-                            :items="categoriasExistentes"
-                            variant="outlined" density="compact"
-                            prepend-inner-icon="mdi-tag"
-                            class="mb-2" />
+                                    <v-text-field
+                                        v-model="hymn.titulo"
+                                        label="Título del himno"
+                                        variant="outlined" density="compact"
+                                        prepend-inner-icon="mdi-format-title"
+                                        class="mb-2" />
 
-                        <!-- Barra de formato para la letra — @pointerdown.prevent preserva selección -->
-                        <div class="format-toolbar mb-1" @pointerdown.prevent>
-                            <span class="format-toolbar__label">Formato:</span>
-                            <v-btn size="x-small" variant="tonal" @click="fmtBold(letraRef)">
-                                <strong>N</strong>
-                            </v-btn>
-                            <v-btn size="x-small" variant="tonal" @click="fmtItalic(letraRef)">
-                                <em>C</em>
-                            </v-btn>
-                            <v-btn size="x-small" variant="tonal" title="Centrar" @click="fmtCenter(letraRef)">
-                                <v-icon size="14">mdi-format-align-center</v-icon>
-                            </v-btn>
-                            <v-btn size="x-small" variant="tonal" title="Justificar" @click="fmtJustify(letraRef)">
-                                <v-icon size="14">mdi-format-align-justify</v-icon>
-                            </v-btn>
-                            <v-btn size="x-small" variant="tonal" title="Izquierda" @click="fmtLeft(letraRef)">
-                                <v-icon size="14">mdi-format-align-left</v-icon>
-                            </v-btn>
-                        </div>
+                                    <!-- Categoría libre — escribe o elige una existente -->
+                                    <v-combobox
+                                        v-model="hymn.categoria"
+                                        label="Categoría (escribe o elige)"
+                                        :items="categoriasExistentes"
+                                        variant="outlined" density="compact"
+                                        prepend-inner-icon="mdi-tag"
+                                        class="mb-2" />
 
-                        <div
-                            ref="letraRef"
-                            contenteditable="true"
-                            class="rich-editor mb-3"
-                            data-placeholder="Letra del himno (opcional)"
-                            @input="hymn.letra = $event.target.innerHTML"
-                            @mouseup="onEditorSelect(letraRef)"
-                            @paste.prevent="onPaste($event, letraRef)"
-                            @contextmenu.prevent="showCtxMenu($event, letraRef)" />
+                                    <!-- Barra de formato para la letra — @pointerdown.prevent preserva selección -->
+                                    <div class="format-toolbar mb-1" @pointerdown.prevent>
+                                        <span class="format-toolbar__label">Formato:</span>
+                                        <v-btn size="x-small" variant="tonal" @click="fmtBold(letraRef)">
+                                            <strong>N</strong>
+                                        </v-btn>
+                                        <v-btn size="x-small" variant="tonal" @click="fmtItalic(letraRef)">
+                                            <em>C</em>
+                                        </v-btn>
+                                        <v-btn size="x-small" variant="tonal" title="Centrar" @click="fmtCenter(letraRef)">
+                                            <v-icon size="14">mdi-format-align-center</v-icon>
+                                        </v-btn>
+                                        <v-btn size="x-small" variant="tonal" title="Justificar" @click="fmtJustify(letraRef)">
+                                            <v-icon size="14">mdi-format-align-justify</v-icon>
+                                        </v-btn>
+                                        <v-btn size="x-small" variant="tonal" title="Izquierda" @click="fmtLeft(letraRef)">
+                                            <v-icon size="14">mdi-format-align-left</v-icon>
+                                        </v-btn>
+                                    </div>
 
-                        <v-file-input
-                            v-model="hymnArchivo"
-                            :label="hymnEditingId ? 'Nuevo MP3 (opcional, solo si reemplazas)' : 'Archivo MP3'"
-                            accept="audio/mpeg,audio/mp3"
-                            variant="outlined" density="compact"
-                            prepend-icon=""
-                            prepend-inner-icon="mdi-file-music"
-                            class="mb-3" />
+                                    <div
+                                        ref="letraRef"
+                                        contenteditable="true"
+                                        class="rich-editor mb-3"
+                                        data-placeholder="Letra del himno (opcional)"
+                                        @input="hymn.letra = $event.target.innerHTML"
+                                        @mouseup="onEditorSelect(letraRef)"
+                                        @paste.prevent="onPaste($event, letraRef)"
+                                        @contextmenu.prevent="showCtxMenu($event, letraRef)" />
 
-                        <!-- Barra de progreso -->
-                        <v-progress-linear
-                            v-if="uploadProgress > 0 && uploadProgress < 100"
-                            :model-value="uploadProgress"
-                            color="primary" rounded height="6"
-                            class="mb-3" />
+                                    <v-file-input
+                                        v-model="hymnArchivo"
+                                        :label="hymnEditingId ? 'Nuevo MP3 (opcional, solo si reemplazas)' : 'Archivo MP3'"
+                                        accept="audio/mpeg,audio/mp3"
+                                        variant="outlined" density="compact"
+                                        prepend-icon=""
+                                        prepend-inner-icon="mdi-file-music"
+                                        class="mb-3" />
 
-                        <div class="d-flex ga-2">
-                            <v-btn v-if="hymnEditingId" variant="tonal" rounded="lg"
-                                prepend-icon="mdi-close" @click="cancelEditHymn">
-                                Cancelar
-                            </v-btn>
-                            <v-btn
-                                color="primary" :block="!hymnEditingId" rounded="lg"
-                                :prepend-icon="hymnEditingId ? 'mdi-check' : 'mdi-cloud-upload'"
-                                :loading="uploadingHymn"
-                                :disabled="!hymn.titulo || !hymn.categoria || (!hymnEditingId && !hymnArchivo)"
-                                @click="uploadHymn">
-                                {{ hymnEditingId ? 'Actualizar' : 'Subir himno' }}
-                            </v-btn>
-                        </div>
+                                    <!-- Barra de progreso -->
+                                    <v-progress-linear
+                                        v-if="uploadProgress > 0 && uploadProgress < 100"
+                                        :model-value="uploadProgress"
+                                        color="primary" rounded height="6"
+                                        class="mb-3" />
 
-                        <v-divider class="my-4" />
+                                    <div class="d-flex ga-2">
+                                        <v-btn v-if="hymnEditingId" variant="tonal" rounded="lg"
+                                            prepend-icon="mdi-close" @click="cancelEditHymn">
+                                            Cancelar
+                                        </v-btn>
+                                        <v-btn
+                                            color="primary" :block="!hymnEditingId" rounded="lg"
+                                            :prepend-icon="hymnEditingId ? 'mdi-check' : 'mdi-cloud-upload'"
+                                            :loading="uploadingHymn"
+                                            :disabled="!hymn.titulo || !hymn.categoria || (!hymnEditingId && !hymnArchivo)"
+                                            @click="uploadHymn">
+                                            {{ hymnEditingId ? 'Actualizar' : 'Subir himno' }}
+                                        </v-btn>
+                                    </div>
 
-                        <h3 class="text-body-1 font-weight-bold mb-3">
-                            <v-icon size="18" class="mr-1">mdi-music-note-list</v-icon>
-                            Himnos subidos ({{ hymns.length }})
-                        </h3>
+                                </v-expansion-panel-text>
+                            </v-expansion-panel>
 
-                        <div v-if="loadingHymns" class="text-center py-4">
-                            <v-progress-circular indeterminate color="primary" size="32" />
-                        </div>
+                            <!-- ═══ Panel 3: Listado de himnos (paginado de 100 en 100) ═══ -->
+                            <v-expansion-panel>
+                                <v-expansion-panel-title>
+                                    <v-icon size="18" class="mr-2">mdi-music-note-list</v-icon>
+                                    Himnos subidos ({{ hymns.length }})
+                                </v-expansion-panel-title>
+                                <v-expansion-panel-text>
 
-                        <v-list v-else density="compact" class="pa-0">
-                            <v-list-item
-                                v-for="h in hymns" :key="h.id"
-                                :title="`${h.numero ? '#'+h.numero+' — ' : ''}${h.titulo}`"
-                                :subtitle="h.categoria"
-                                rounded="lg" :active="hymnEditingId === h.id"
-                                color="primary" class="mb-1 px-2">
-                                <template #append>
-                                    <v-btn icon size="x-small" color="primary" variant="text"
-                                        @click="startEditHymn(h)">
-                                        <v-icon size="16">mdi-pencil</v-icon>
-                                    </v-btn>
-                                    <v-btn icon size="x-small" color="error" variant="text"
-                                        :loading="deletingHymnId === h.id"
-                                        @click="deleteHymn(h)">
-                                        <v-icon size="16">mdi-delete</v-icon>
-                                    </v-btn>
-                                </template>
-                            </v-list-item>
-                            <v-list-item v-if="hymns.length === 0">
-                                <v-list-item-title class="text-caption text-medium-emphasis">
-                                    No hay himnos subidos aún.
-                                </v-list-item-title>
-                            </v-list-item>
-                        </v-list>
+                                    <v-text-field
+                                        v-model="listSearch"
+                                        label="Buscar por título o número..."
+                                        variant="outlined" density="compact"
+                                        prepend-inner-icon="mdi-magnify"
+                                        clearable hide-details
+                                        class="mb-3" />
+
+                                    <div v-if="loadingHymns" class="text-center py-4">
+                                        <v-progress-circular indeterminate color="primary" size="32" />
+                                    </div>
+
+                                    <template v-else>
+                                        <div class="text-caption text-medium-emphasis mb-2">
+                                            Mostrando {{ listFiltered.length ? listPageStart + 1 : 0 }}-{{ listPageEnd }} de {{ listFiltered.length }}
+                                        </div>
+
+                                        <v-list density="compact" class="pa-0">
+                                            <v-list-item
+                                                v-for="h in listPageItems" :key="h.id"
+                                                :title="`${h.numero ? '#'+h.numero+' — ' : ''}${h.titulo}`"
+                                                :subtitle="h.categoria"
+                                                rounded="lg" :active="hymnEditingId === h.id"
+                                                color="primary" class="mb-1 px-2">
+                                                <template #append>
+                                                    <v-btn icon size="x-small" color="primary" variant="text"
+                                                        @click="startEditHymn(h)">
+                                                        <v-icon size="16">mdi-pencil</v-icon>
+                                                    </v-btn>
+                                                    <v-btn icon size="x-small" color="error" variant="text"
+                                                        :loading="deletingHymnId === h.id"
+                                                        @click="deleteHymn(h)">
+                                                        <v-icon size="16">mdi-delete</v-icon>
+                                                    </v-btn>
+                                                </template>
+                                            </v-list-item>
+                                            <v-list-item v-if="listFiltered.length === 0">
+                                                <v-list-item-title class="text-caption text-medium-emphasis">
+                                                    No hay himnos que coincidan.
+                                                </v-list-item-title>
+                                            </v-list-item>
+                                        </v-list>
+
+                                        <div v-if="listFiltered.length > LIST_PAGE_SIZE" class="d-flex align-center justify-center ga-2 mt-2">
+                                            <v-btn size="small" variant="tonal" icon :disabled="listPage === 0" @click="listPage--">
+                                                <v-icon size="18">mdi-chevron-left</v-icon>
+                                            </v-btn>
+                                            <span class="text-caption">Página {{ listPage + 1 }} / {{ listTotalPages }}</span>
+                                            <v-btn size="small" variant="tonal" icon :disabled="listPage >= listTotalPages - 1" @click="listPage++">
+                                                <v-icon size="18">mdi-chevron-right</v-icon>
+                                            </v-btn>
+                                        </div>
+                                    </template>
+
+                                </v-expansion-panel-text>
+                            </v-expansion-panel>
+
+                        </v-expansion-panels>
                     </div>
 
                     <!-- ── PESTAÑA DEVOCIONAL ── -->
@@ -964,7 +1002,32 @@ onMounted(() => {
     })
 })
 
+// ── Acordeón del himnario — 0: Subir himno, 1: Listado ──
+const himnarioPanel = ref(0)
+
+// ── LISTADO paginado (100 en 100) ──
+const LIST_PAGE_SIZE = 100
+const listSearch = ref('')
+const listPage   = ref(0)
+
+const listFiltered = computed(() => {
+    let lista = hymns.value
+    if (listSearch.value?.trim()) {
+        const q = listSearch.value.trim().toLowerCase()
+        lista = lista.filter(h => h.titulo.toLowerCase().includes(q) || String(h.numero).includes(q))
+    }
+    return lista
+})
+
+const listTotalPages = computed(() => Math.max(1, Math.ceil(listFiltered.value.length / LIST_PAGE_SIZE)))
+const listPageStart  = computed(() => listPage.value * LIST_PAGE_SIZE)
+const listPageEnd    = computed(() => Math.min(listPageStart.value + LIST_PAGE_SIZE, listFiltered.value.length))
+const listPageItems  = computed(() => listFiltered.value.slice(listPageStart.value, listPageEnd.value))
+
+watch(listSearch, () => { listPage.value = 0 })
+
 const startEditHymn = (h) => {
+    himnarioPanel.value = 0
     hymnEditingId.value = h.id
     hymn.numero    = h.numero || ''
     hymn.titulo    = h.titulo
@@ -1641,5 +1704,12 @@ onUnmounted(() => {
   width: 36px;
   text-align: right;
   flex-shrink: 0;
+}
+
+.tag-hymn-list {
+  max-height: 320px;
+  overflow-y: auto;
+  border: 1px solid rgba(var(--v-border-color), 0.15);
+  border-radius: 10px;
 }
 </style>
